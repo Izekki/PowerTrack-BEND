@@ -1,0 +1,3 @@
+# CONTROLLER
+
+Aqui iran todo los controladores que se ocuparan para poder manejarlos de acuerdo al Modelo MVC
