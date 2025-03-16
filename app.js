@@ -2,6 +2,7 @@
 import express, { json } from 'express'
 import dotenv from 'dotenv';
 import groupRouter from './routes/groupRouter.js';
+import deviceRouter from './routes/deviceRouter.js';
 import {connectDB} from './db/connection.js';
 //import cookieParser from 'cookie-parser'
 
@@ -11,7 +12,7 @@ import { authMiddleware } from './middlewares/authMiddleware.js'
 import { jsonErrorMiddleware } from './middlewares/jsonErrorMiddleware.js'
 
 dotenv.config();
-const port = 4000;
+const port = 5051;
 
 export const app = express()
 app.use(corsMiddleware())
