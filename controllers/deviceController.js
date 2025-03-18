@@ -18,3 +18,17 @@ export const editDevice = async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor', error });
   }
 };
+
+export const addDevice = async (req, res) => {
+  const { name, status } = req.body;
+
+  try {
+    const newDeviceId = await createDevice(name, status);
+    res.status(201).json({ 
+      message: 'Dispositivo creado exitosamente', 
+      id: newDeviceId 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al crear el dispositivo', error });
+  }
+};

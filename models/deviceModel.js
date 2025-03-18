@@ -14,3 +14,10 @@ export const updateDevice = async (id, name, status) => {
   return result.affectedRows;
 };
 
+export const createDevice = async (name, status) => {
+  const [result] = await db.query(
+    'INSERT INTO dispositivos (nombre, estado) VALUES (?, ?)', 
+    [name, status]
+  );
+  return result.insertId;  // Devuelve el ID del nuevo dispositivo
+};
