@@ -1,5 +1,5 @@
 import express from 'express';
-import { editDevice } from '../controllers/deviceController.js';
+import { editDevice, addDevice } from '../controllers/deviceController.js';
 import { validateDevice } from '../middlewares/validateDeviceMiddleware.js';
 
 const router = express.Router();
