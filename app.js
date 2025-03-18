@@ -21,9 +21,9 @@ app.use(express.json())
 app.use(jsonErrorMiddleware)
 //app.use(cookieParser())
 app.use(authMiddleware)
-app.use('/api', deviceRouter);
+
 app.use('/user', (req, res) => { return res.status(200).send({message:'Esta es la api de usuarios'})});
-app.use('/device', (req, res) => { return res.status(200).send({message:'Esta es la api de dispositivos'})});
+app.use('/device', deviceRouter);
 app.use('/groups',groupRouter);
 
 

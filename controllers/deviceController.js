@@ -33,7 +33,7 @@ export const addDevice = async (req, res) => {
   }
 };*/
 
-import { getDeviceById, updateDevice, createDevice } from '../models/deviceModel.js';
+import { getDeviceById, updateDevice, createDevice, getAllDevices } from '../models/deviceModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -65,5 +65,14 @@ export const addDevice = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Error al crear el dispositivo', error });
+  }
+};
+
+export const getDevices = async (req, res) => {
+  try {
+    const devices = await getAllDevices();
+    res.status(200).json(devices);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener los dispositivos', error });
   }
 };

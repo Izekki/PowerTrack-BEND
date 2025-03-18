@@ -44,3 +44,14 @@ export const createDevice = async (name) => {
   );
   return result.insertId;
 };
+
+export const getAllDevices = async () => {
+  const query = `
+    SELECT dispositivos.id, dispositivos.nombre AS dispositivo_nombre, dispositivos.ubicacion, dispositivos.usuario_id, grupos.nombre AS grupo_nombre
+    FROM dispositivos
+    LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
+  `;
+  
+  const [rows] = await db.query(query);
+  return rows;
+};
