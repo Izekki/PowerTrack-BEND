@@ -46,12 +46,31 @@ export const createDevice = async (name) => {
 };
 
 export const getAllDevices = async () => {
-  const query = `
-    SELECT dispositivos.id, dispositivos.nombre AS dispositivo_nombre, dispositivos.ubicacion, dispositivos.usuario_id, grupos.nombre AS grupo_nombre
-    FROM dispositivos
-    LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
-  `;
-  
-  const [rows] = await db.query(query);
-  return rows;
+  try {
+    const query = `
+      SELECT dispositivos.id, dispositivos.nombre AS dispositivo_nombre, dispositivos.ubicacion, dispositivos.usuario_id, grupos.nombre AS grupo_nombre
+      FROM dispositivos
+      LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
+    `;
+    const [rows] = await db.query(query);
+    return rows;
+  } catch (error) {
+    console.error('Error al obtener todos los dispositivos:', error.message);
+    throw new Error('Error al obtener todos los dispositivos');
+  }
+};
+
+export const getUnassignedDevicesFromDB = async () => {
+  try {
+    const query = `
+      SELECT dispositivos.id, dispositivos.nombre, dispositivos.ubicacion
+      FROM dispositivos
+      WHERE dispositivos.id_grupo IS NULL
+    `;
+    const [rows] = await db.query(query);
+    return rows;
+  } catch (error) {
+    console.error('Error al obtener dispositivos no asignados:', error.message);
+    throw new Error('Error al obtener dispositivos no asignados');
+  }
 };

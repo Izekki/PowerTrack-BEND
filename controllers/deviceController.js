@@ -33,7 +33,7 @@ export const addDevice = async (req, res) => {
   }
 };*/
 
-import { getDeviceById, updateDevice, createDevice, getAllDevices } from '../models/deviceModel.js';
+import { getDeviceById, updateDevice, createDevice, getAllDevices,getUnassignedDevicesFromDB } from '../models/deviceModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -74,5 +74,15 @@ export const getDevices = async (req, res) => {
     res.status(200).json(devices);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener los dispositivos', error });
+  }
+};
+
+export const getUnassignedDevices = async (req, res) => {
+  try {
+    const devices = await getUnassignedDevicesFromDB();
+    res.status(200).json(devices);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al obtener los dispositivos sin grupo', error });
   }
 };
