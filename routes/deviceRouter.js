@@ -1,12 +1,14 @@
 import express from 'express';
-import { editDevice, addDevice, getDevices,getUnassignedDevices } from '../controllers/deviceController.js';
+import { getDeviceById,editDevice, addDevice, getDevices,getUnassignedDevices } from '../controllers/deviceController.js';
 import { validateDevice } from '../middlewares/validateDeviceMiddleware.js';
 
 const router = express.Router();
 
 router.post('/devices', validateDevice, addDevice);
 
-router.put('/editar', validateDevice, editDevice);
+router.put('/editar/:id', validateDevice, editDevice);
+
+router.get('/obtenerPorId/:id', getDeviceById);
 
 router.get('/obtener', getDevices);
 

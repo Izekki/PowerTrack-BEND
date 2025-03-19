@@ -24,7 +24,7 @@ export const createDevice = async (name, status) => {
 
 import { db } from '../db/connection.js';
 
-export const getDeviceById = async (id) => {
+export const getDeviceByIdFromDB = async (id) => {
   const [rows] = await db.query('SELECT * FROM dispositivos WHERE id = ?', [id]);
   return rows[0];
 };

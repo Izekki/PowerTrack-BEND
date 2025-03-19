@@ -33,7 +33,7 @@ export const addDevice = async (req, res) => {
   }
 };*/
 
-import { getDeviceById, updateDevice, createDevice, getAllDevices,getUnassignedDevicesFromDB } from '../models/deviceModel.js';
+import { getDeviceByIdFromDB, updateDevice, createDevice, getAllDevices,getUnassignedDevicesFromDB } from '../models/deviceModel.js';
 
 export const editDevice = async (req, res) => {
   const { id, name } = req.body;
@@ -52,6 +52,19 @@ export const editDevice = async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor', error });
   }
 };
+
+export const getDeviceById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const device = await getDeviceByIdFromDB(id);
+    if (!device) return res.status(404).json({ message: 'Dispositivo no encontrado' });
+
+    res.json(device);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener el dispositivo', error });
+  }
+}
 
 export const addDevice = async (req, res) => {
   const { name } = req.body;
