@@ -36,8 +36,7 @@ export const addDevice = async (req, res) => {
 import { getDeviceById, updateDevice, createDevice, getAllDevices,getUnassignedDevicesFromDB } from '../models/deviceModel.js';
 
 export const editDevice = async (req, res) => {
-  const { id } = req.params;
-  const { name } = req.body;
+  const { id, name } = req.body;
 
   try {
     const device = await getDeviceById(id);
