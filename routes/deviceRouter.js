@@ -14,4 +14,5 @@ router.get('/obtener', getDevices);
 
 router.get('/unassigned', getUnassignedDevices);
 
+
 export default router;

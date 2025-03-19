@@ -41,3 +41,21 @@ export const createGroup = async (name, devices) => {
         connection.release();
     }
 };
+
+export const getGroups = async () => {
+    const [groups] = await db.query('SELECT * FROM grupos;');
+
+    // Obtiene los dispositivos asociados a cada grupo
+    for (const group of groups) {
+        const [devices] = await db.query(
+            `SELECT d.id, d.nombre, d.ubicacion
+             FROM dispositivos d
+             JOIN dispositivos_agrupados da ON d.id = da.dispositivo_id
+             WHERE da.grupo_id = ?;`,
+            [group.id]
+        );
+        group.devices = devices;  // Agrega los dispositivos al grupo
+    }
+
+    return groups;
+};
