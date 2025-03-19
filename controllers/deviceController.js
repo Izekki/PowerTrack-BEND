@@ -67,10 +67,10 @@ export const getDeviceById = async (req, res) => {
 }
 
 export const addDevice = async (req, res) => {
-  const { name } = req.body;
+  const { nombre, ubicacion, usuario_id, id_grupo } = req.body;  // Nuevos campos
 
   try {
-    const newDeviceId = await createDevice(name);
+    const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo);
     res.status(201).json({ 
       message: 'Dispositivo creado exitosamente', 
       id: newDeviceId 
