@@ -29,10 +29,10 @@ export const getDeviceByIdFromDB = async (id) => {
   return rows[0];
 };
 
-export const updateDevice = async (id, name) => {
+export const updateDevice = async (id, name, ubicacion, id_usuario, id_grupo) => {
   const [result] = await db.query(
-    'UPDATE dispositivos SET nombre = ? WHERE id = ?',
-    [name, id]
+    'UPDATE dispositivos   SET nombre = ?, ubicacion = ?, usuario_id = ?, id_grupo = ? WHERE id = ?',
+    [name, ubicacion, id_usuario, id_grupo, id]
   );
   return result.affectedRows;
 };
