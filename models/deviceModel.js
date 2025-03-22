@@ -49,7 +49,13 @@ export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo) => {
 export const getAllDevices = async () => {
   try {
     const query = `
-      SELECT dispositivos.id, dispositivos.nombre AS dispositivo_nombre, dispositivos.ubicacion, dispositivos.usuario_id, grupos.nombre AS grupo_nombre
+      SELECT 
+        dispositivos.id, 
+        dispositivos.nombre AS dispositivo_nombre, 
+        dispositivos.ubicacion, 
+        dispositivos.usuario_id, 
+        dispositivos.id_grupo,  -- Añadido id_grupo
+        grupos.nombre AS grupo_nombre
       FROM dispositivos
       LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
     `;
