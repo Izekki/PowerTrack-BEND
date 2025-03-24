@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.post('/devices', validateDevice, addDevice);
 
+
 router.put('/editar/:id', validateDevice, editDevice);
 
 router.get('/obtenerPorId/:id', getDeviceById);
