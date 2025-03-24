@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import groupRouter from './routes/groupRouter.js';
 import deviceRouter from './routes/deviceRouter.js';
 import {connectDB} from './db/connection.js';
+import loginRouter from './routes/loginRouter.js';
 //import cookieParser from 'cookie-parser'
 
 // Importar middlewares
@@ -23,6 +24,7 @@ app.use(jsonErrorMiddleware)
 app.use(authMiddleware)
 
 app.use('/user', (req, res) => { return res.status(200).send({message:'Esta es la api de usuarios'})});
+app.use('/login', loginRouter);
 app.use('/device', deviceRouter);
 app.use('/groups',groupRouter);
 
