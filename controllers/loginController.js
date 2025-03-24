@@ -9,10 +9,7 @@ export const loginUser = async (req, res) => {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
-    const sal = parseInt(process.env.SALT_ROUNDS) || 10;
-    const hashedPassword = await bcrypt.hash(contraseña, sal);
-
-    const isValidPassword = await validatePassword(hashedPassword, user.contraseña);
+    const isValidPassword = await validatePassword(password, user.contraseña);
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
