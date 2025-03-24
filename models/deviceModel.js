@@ -29,10 +29,10 @@ export const getDeviceByIdFromDB = async (id) => {
   return rows[0];
 };
 
-export const updateDevice = async (id, name) => {
+export const updateDevice = async (id, name, ubicacion, id_usuario, id_grupo) => {
   const [result] = await db.query(
-    'UPDATE dispositivos SET nombre = ? WHERE id = ?',
-    [name, id]
+    'UPDATE dispositivos   SET nombre = ?, ubicacion = ?, usuario_id = ?, id_grupo = ? WHERE id = ?',
+    [name, ubicacion, id_usuario, id_grupo, id]
   );
   return result.affectedRows;
 };
@@ -49,7 +49,13 @@ export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo) => {
 export const getAllDevices = async () => {
   try {
     const query = `
-      SELECT dispositivos.id, dispositivos.nombre AS dispositivo_nombre, dispositivos.ubicacion, dispositivos.usuario_id, grupos.nombre AS grupo_nombre
+      SELECT 
+        dispositivos.id, 
+        dispositivos.nombre AS dispositivo_nombre, 
+        dispositivos.ubicacion, 
+        dispositivos.usuario_id, 
+        dispositivos.id_grupo,  -- Añadido id_grupo
+        grupos.nombre AS grupo_nombre
       FROM dispositivos
       LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
     `;

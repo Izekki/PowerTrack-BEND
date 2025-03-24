@@ -36,15 +36,20 @@ export const addDevice = async (req, res) => {
 import { getDeviceByIdFromDB, updateDevice, createDevice, getAllDevices,getUnassignedDevicesFromDB } from '../models/deviceModel.js';
 
 export const editDevice = async (req, res) => {
-  const { id, name } = req.body;
+  const { id } = req.params;
+  const {name, ubicacion, id_grupo } = req.body;
 
   try {
-    const device = await getDeviceById(id);
+    const device = await getDeviceByIdFromDB(id);
     if (!device) return res.status(404).json({ message: 'Dispositivo no encontrado' });
 
-    const updated = await updateDevice(id, name);
+    const id_usuario = device.usuario_id;
+
+    const updated = await updateDevice(id, name, ubicacion, id_usuario, id_grupo);
     if (updated) {
-      res.json({ message: 'Dispositivo actualizado correctamente' });
+      const updateDevice = await getDeviceByIdFromDB(id);
+      res.json(updateDevice);
+
     } else {
       res.status(500).json({ message: 'No se pudo actualizar el dispositivo' });
     }

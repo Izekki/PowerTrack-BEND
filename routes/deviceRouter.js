@@ -6,8 +6,12 @@ const router = express.Router();
 
 router.post('/devices', validateDevice, addDevice);
 
+<<<<<<< HEAD
 
 router.put('/editar/:id', validateDevice, editDevice);
+=======
+router.put('/editar/:id',editDevice);
+>>>>>>> a0afad7c83220b7041a7104909c9b9b0443bd9bf
 
 router.get('/obtenerPorId/:id', getDeviceById);
 
