@@ -67,6 +67,27 @@ export const getAllDevices = async () => {
   }
 };
 
+export const getAllDeviceForUserFromDB = async (id) => {
+  try {
+    const query = `SELECT 
+        dispositivos.id, 
+        dispositivos.nombre AS dispositivo_nombre, 
+        dispositivos.ubicacion, 
+        dispositivos.usuario_id, 
+        dispositivos.id_grupo,  -- Añadido id_grupo
+        grupos.nombre AS grupo_nombre
+      FROM dispositivos
+      LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
+      WHERE dispositivos.usuario_id = ?`;
+      const [rows] = await db.query(query, [id]);
+      return rows;
+  }catch(error){
+    console.error('Error al obtener dispositivos para el usuario:', error.message);
+    throw new Error('Error al obtener dispositivos para el usuario');
+    }
+};
+
+
 export const getUnassignedDevicesFromDB = async () => {
   try {
     const query = `

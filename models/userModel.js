@@ -23,7 +23,7 @@ export class userModel {
 
         if (existingUser.length > 0) throw new DBElementAlredyExists('El correo ya esta registrado');
 
-        const sal = parseInt(process.env.SALT_ROUNDS) || 10;
+        const sal = parseInt(process.env.SALT_ROUNDS) || 8;
         const hashedPassword = await bcrypt.hash(contraseña, sal);
 
         try {
