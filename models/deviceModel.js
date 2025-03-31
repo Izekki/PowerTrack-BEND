@@ -81,3 +81,14 @@ export const getUnassignedDevicesFromDB = async () => {
     throw new Error('Error al obtener dispositivos no asignados');
   }
 };
+
+export const getDeviceByName = async (nombre) => {
+  try {
+      const [rows] = await db.query('SELECT * FROM dispositivos WHERE nombre = ?', [nombre]);
+      return rows.length > 0 ? rows[0] : null;
+  } catch (error) {
+      console.error('Error al buscar el dispositivo por nombre:', error.message);
+      throw new Error('Error al verificar el nombre del dispositivo');
+  }
+};
+

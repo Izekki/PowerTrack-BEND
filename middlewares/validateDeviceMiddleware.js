@@ -1,30 +1,36 @@
-/*export const validateDevice = (req, res, next) => {
-    const { name, status } = req.body;
-    if (!name || !status) {
-      return res.status(400).json({ message: 'Todos los campos son obligatorios' });
-    }
-    next();
-  };
+import { getDeviceByName } from '../models/deviceModel.js';  // Ajusta la ruta según corresponda
 
-  export const validateDevice = (req, res, next) => {
-    const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ message: 'El nombre es obligatorio' });
-    }
-    next();
-};*/
-export const validateDevice = (req, res, next) => {
+
+export const validateDevice = async (req, res, next) => {
+  console.log("Datos recibidos en la solicitud:", req.body);
   const { nombre, ubicacion, usuario_id, id_grupo } = req.body;
 
-  if (!nombre || !ubicacion || !usuario_id ) {
+  // Validación de campos obligatorios
+  if (!nombre || !ubicacion || !usuario_id) {
     return res.status(400).json({ message: 'Todos los campos son obligatorios' });
   }
 
-  if (typeof usuario_id !== 'number' || (id_grupo !== null && typeof id_grupo !== 'number')) {
-    return res.status(400).json({ message: 'usuario_id e id_grupo deben ser números o id_grupo puede ser null' });
-  }  
+  // Validación de tipos de datos
+  const usuarioIdNum = parseInt(usuario_id, 10);
+const idGrupoNum = id_grupo ? parseInt(id_grupo, 10) : null;
 
-  next();
+if (isNaN(usuarioIdNum) || (idGrupoNum !== null && isNaN(idGrupoNum))) {
+  return res.status(400).json({ message: 'usuario_id e id_grupo deben ser números o id_grupo puede ser null' });
+}
+
+
+  try {
+    // Verificación de dispositivo duplicado
+    const existingDevice = await getDeviceByName(nombre);
+    
+    if (existingDevice) {
+      return res.status(400).json({ message: 'Error: El dispositivo ya existe en la base de datos.' });
+    }
+
+    await next(); // Continúa con la solicitud si no está duplicado
+  } catch (error) {
+    res.status(500).json({ message: 'Error al validar el dispositivo', error });
+  }
 };
 
 
