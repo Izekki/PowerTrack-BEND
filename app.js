@@ -6,6 +6,7 @@ import deviceRouter from './routes/deviceRouter.js';
 import {connectDB} from './db/connection.js';
 import loginRouter from './routes/loginRouter.js';
 import userRouter from './routes/UserRouter.js';
+import supplierRouter from './routes/supplierRouter.js'
 //import cookieParser from 'cookie-parser'
 
 // Importar middlewares
@@ -30,6 +31,7 @@ app.use('/user', userRouter);
 app.use('/login', loginRouter);
 app.use('/device', deviceRouter);
 app.use('/groups',groupRouter);
+app.use('/supplier',supplierRouter);
 
 
 // Ruta 404
