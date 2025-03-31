@@ -10,7 +10,8 @@ export class userModel {
         const {
             nombre,
             correo,
-            contraseña
+            contraseña,
+            proveedor
         } = input;
 
         let existingUser = null;
@@ -23,14 +24,25 @@ export class userModel {
 
         if (existingUser.length > 0) throw new DBElementAlredyExists('El correo ya esta registrado');
 
+
+        let existingSupplier = null;
+
+        try {
+            [existingSupplier] = await db.query(`SELECT * FROM proveedores WHERE id = ?`, [proveedor]);
+        } catch (error) {
+            throw new DBConnectionError('Ocurrio un error al obtener los datos ' + error.message);
+        }
+
+        if (!existingSupplier && existingSupplier.length == 0) throw new DBElementAlredyExists('No se encontro el proveedor');
+
         const sal = parseInt(process.env.SALT_ROUNDS) || 8;
         const hashedPassword = await bcrypt.hash(contraseña, sal);
 
         try {
             await db.query(
-                `INSERT INTO usuarios (nombre, correo, contraseña)
-                 VALUES (?, ?, ?)`,
-                [nombre, correo, hashedPassword]
+                `INSERT INTO usuarios (nombre, correo, contraseña, id_proveedor)
+                 VALUES (?, ?, ?, ?)`,
+                [nombre, correo, hashedPassword, proveedor]
             );
         } catch (error) {
             throw new DBConnectionError('Ocurrio un error al crear el usuario ' + error.message);
@@ -50,6 +62,9 @@ export class userModel {
         } catch {
             throw new DBConnectionError('Ocurrio un error al obtener el nuevo usuario');
         }
+
+
+
 
         return usuario[0];
     }
