@@ -1,13 +1,15 @@
 
 export const validateRegister = (req, res, next) => {
-    const { nombre, correo, contraseña } = req.body;
+    const { nombre, correo, contraseña, proveedor } = req.body;
     
-    console.log(req.body);
+    //console.log(req.body);
 
     if (!nombre || !correo || !contraseña ) return res.status(400).json({ message: 'Todos los campos son obligatorios' });
     
     let errors = [];
-    errors = [...errors, ...validateName(nombre), ...validateEmail(correo), ...validatePassword(contraseña)];
+
+    console.log("Los errores son:  \nValidar el nombre: " + validateName(nombre) + "\nValidar email: " + validateEmail(correo) + "\nValidar password: " + validatePassword(contraseña) + "\nValidar provedor" + validateProveedor(proveedor) )
+    errors = [...errors, ...validateName(nombre), ...validateEmail(correo), ...validatePassword(contraseña), ...validateProveedor(proveedor)];
 
     if(errors.length > 0) return res.status(400).json({ message: errors.join(", ") });
 
@@ -21,7 +23,7 @@ export const validateRegister = (req, res, next) => {
     name = name.trim();
     if (name.length < 3) return ["El nombre debe tener al menos 3 caracteres"];
     if (name.length > 100) return ["El nombre no debe tener más de 100 caracteres"];
-    if(!/^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9 ]+$/.test(name)) return ["El nombre solo puede contener letras, números y espacios"];
+    if(!/^[A-Za-zÁÉÍÓÚáéíóúÑñ.0-9 ]+$/.test(name)) return ["El nombre solo puede contener letras, números y espacios"];
     return [];
   }
 
@@ -60,4 +62,10 @@ export const validateRegister = (req, res, next) => {
      const domain = email.split("@")[1];
      if (domain && (domain.includes("_") || domain.includes("-"))) return ["El correo no puede tener guion en el dominio"];
      return [];
+  }
+
+
+  function validateProveedor(proveedor){
+    if(isNaN(proveedor)) return ["El proveedor debe ser un numero"];
+   return [];
   }

@@ -5,12 +5,12 @@ import DBElementAlredyExists from '../models/modelserror/DBElementAlredyExists.j
 export class userController {
 
     register = async (req, res) => {
-        let { nombre, correo, contraseña } = req.body;
+        let { nombre, correo, contraseña, proveedor} = req.body;
         nombre = nombre.trim();
         correo = correo.trim();
 
         try {
-            const newUser = await userModel.register({ input: { nombre, correo, contraseña} });
+            const newUser = await userModel.register({ input: { nombre, correo, contraseña, proveedor} });
             
             return res.status(201).json({message:"Usuario creado con exito", user:newUser});
     
