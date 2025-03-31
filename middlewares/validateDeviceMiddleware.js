@@ -21,7 +21,7 @@ if (isNaN(usuarioIdNum) || (idGrupoNum !== null && isNaN(idGrupoNum))) {
 
   try {
     // Verificación de dispositivo duplicado
-    const existingDevice = await getDeviceByName(nombre);
+    const existingDevice = await getDeviceByName(nombre, usuario_id);
     
     if (existingDevice) {
       return res.status(400).json({ message: 'Error: El dispositivo ya existe en la base de datos.' });

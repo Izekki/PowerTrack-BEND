@@ -103,9 +103,9 @@ export const getUnassignedDevicesFromDB = async () => {
   }
 };
 
-export const getDeviceByName = async (nombre) => {
+export const getDeviceByName = async (nombre, usuario_id) => {
   try {
-      const [rows] = await db.query('SELECT * FROM dispositivos WHERE nombre = ?', [nombre]);
+      const [rows] = await db.query('SELECT * FROM dispositivos WHERE nombre = ? AND usuario_id = ?', [nombre, usuario_id]);
       return rows.length > 0 ? rows[0] : null;
   } catch (error) {
       console.error('Error al buscar el dispositivo por nombre:', error.message);
