@@ -37,11 +37,11 @@ export const updateDevice = async (id, name, ubicacion, id_usuario, id_grupo) =>
   return result.affectedRows;
 };
 
-export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo) => {
+export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo, id_sensor) => {
   const [result] = await db.query(
-    `INSERT INTO dispositivos (nombre, ubicacion, usuario_id, id_grupo) 
-     VALUES (?, ?, ?, ?)`, 
-    [nombre, ubicacion, usuario_id, id_grupo]
+    `INSERT INTO dispositivos (nombre, ubicacion, usuario_id, id_grupo, id_sensor) 
+     VALUES (?, ?, ?, ?, ?)`, 
+    [nombre, ubicacion, usuario_id, id_grupo, id_sensor]
   );
   return result.insertId;  // Devuelve el ID del nuevo dispositivo
 };

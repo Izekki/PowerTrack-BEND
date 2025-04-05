@@ -3,7 +3,7 @@ import { getDeviceByName } from '../models/deviceModel.js';  // Ajusta la ruta s
 
 export const validateDevice = async (req, res, next) => {
   console.log("Datos recibidos en la solicitud:", req.body);
-  const { nombre, ubicacion, usuario_id, id_grupo } = req.body;
+  const { nombre, ubicacion, usuario_id, id_grupo, id_sensor } = req.body;
 
   // Validación de campos obligatorios
   if (!nombre || !ubicacion || !usuario_id) {
