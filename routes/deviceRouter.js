@@ -14,7 +14,7 @@ router.get('/obtener', getDevices);
 
 router.get('/dispositivosPorUsuario/:id', allDeviceForUser);
 
-router.get('/unassigned', getUnassignedDevices);
+router.get('/unassigned/:id', getUnassignedDevices);
 
 
 export default router;

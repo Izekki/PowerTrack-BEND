@@ -88,14 +88,14 @@ export const getAllDeviceForUserFromDB = async (id) => {
 };
 
 
-export const getUnassignedDevicesFromDB = async () => {
+export const getUnassignedDevicesFromDB = async (usuarioId) => {
   try {
     const query = `
       SELECT dispositivos.id, dispositivos.nombre, dispositivos.ubicacion
       FROM dispositivos
-      WHERE dispositivos.id_grupo IS NULL
+      WHERE dispositivos.id_grupo IS NULL AND dispositivos.usuario_id = ?
     `;
-    const [rows] = await db.query(query);
+    const [rows] = await db.query(query, [usuarioId]);
     return rows;
   } catch (error) {
     console.error('Error al obtener dispositivos no asignados:', error.message);

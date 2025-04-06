@@ -95,8 +95,9 @@ export const getDevices = async (req, res) => {
 };
 
 export const getUnassignedDevices = async (req, res) => {
+  const {id} = req.params;
   try {
-    const devices = await getUnassignedDevicesFromDB();
+    const devices = await getUnassignedDevicesFromDB(id);
     res.status(200).json(devices);
   } catch (error) {
     console.error(error);
