@@ -98,3 +98,35 @@ export const updateDeviceType = async (id, tipoId) => {
   );
   return result.affectedRows;
 };
+
+export const deleteDeviceFromIdDB = async (deviceId, usuarioId) => {
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // 1. Eliminar relaciones en dispositivos_agrupados si existe
+    await connection.query(
+      `DELETE FROM dispositivos_agrupados WHERE dispositivo_id = ?;`,
+      [deviceId]
+    );
+
+    // 2. Eliminar el dispositivo verificando que pertenezca al usuario correcto
+    const result = await connection.query(
+      `DELETE FROM dispositivos WHERE id = ? AND usuario_id = ?;`,
+      [deviceId, usuarioId]
+    );
+
+    if (result.affectedRows === 0) {
+      throw new Error('Dispositivo no encontrado o no pertenece al usuario especificado');
+    }
+
+    await connection.commit();
+    return { success: true, message: 'Dispositivo eliminado correctamente' };
+  } catch (error) {
+    await connection.rollback();
+    throw new Error('Error al eliminar el dispositivo: ' + error.message);
+  } finally {
+    connection.release();
+  }
+};

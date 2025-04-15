@@ -1,6 +1,6 @@
 import { getDeviceByIdFromDB, updateDevice, 
   createDevice, getAllDevices,getUnassignedDevicesFromDB, 
-  getAllDeviceForUserFromDB,updateDeviceType } from '../models/deviceModel.js';
+  getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -97,5 +97,21 @@ export const updateTipoDispositivo = async (req, res) => {
   } catch (error) {
     console.error("Error al actualizar el ícono:", error);
     res.status(500).json({ error: "Error al actualizar el ícono" });
+  }
+};
+
+export const deleteDeviceFromId = async (req, res) => {
+  const deviceId = parseInt(req.params.id);
+  const usuarioId = parseInt(req.body.usuarioId);
+
+  if (isNaN(deviceId) || isNaN(usuarioId)) {
+    return res.status(400).json({ error: 'ID de dispositivo o usuario inválido' });
+  }
+
+  try {
+    const result = await deleteDeviceFromIdDB(deviceId, usuarioId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };

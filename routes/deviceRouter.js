@@ -1,6 +1,7 @@
 import express from 'express';
 import { getDeviceById,editDevice,updateTipoDispositivo,
-     addDevice, getDevices,getUnassignedDevices, allDeviceForUser
+     addDevice, getDevices,getUnassignedDevices, allDeviceForUser,
+     deleteDeviceFromId
      } from '../controllers/deviceController.js';
 import { validateDevice } from '../middlewares/validateDeviceMiddleware.js';
 
@@ -19,6 +20,8 @@ router.get('/dispositivosPorUsuario/:id', allDeviceForUser);
 router.get('/unassigned/:id', getUnassignedDevices);
 
 router.put("/editar/icono/:id", updateTipoDispositivo);
+
+router.delete('/deleteDevice/:id', deleteDeviceFromId);
 
 
 export default router;
