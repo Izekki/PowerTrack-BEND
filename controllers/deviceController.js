@@ -1,39 +1,6 @@
-/*import { getDeviceById, updateDevice } from '../models/deviceModel.js';
-
-export const editDevice = async (req, res) => {
-  const { id } = req.params;
-  const { name, status } = req.body;
-
-  try {
-    const device = await getDeviceById(id);
-    if (!device) return res.status(404).json({ message: 'Dispositivo no encontrado' });
-
-    const updated = await updateDevice(id, name, status);
-    if (updated) {
-      res.json({ message: 'Dispositivo actualizado correctamente' });
-    } else {
-      res.status(500).json({ message: 'No se pudo actualizar el dispositivo' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: 'Error interno del servidor', error });
-  }
-};
-
-export const addDevice = async (req, res) => {
-  const { name, status } = req.body;
-
-  try {
-    const newDeviceId = await createDevice(name, status);
-    res.status(201).json({ 
-      message: 'Dispositivo creado exitosamente', 
-      id: newDeviceId 
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error al crear el dispositivo', error });
-  }
-};*/
-
-import { getDeviceByIdFromDB, updateDevice, createDevice, getAllDevices,getUnassignedDevicesFromDB, getAllDeviceForUserFromDB } from '../models/deviceModel.js';
+import { getDeviceByIdFromDB, updateDevice, 
+  createDevice, getAllDevices,getUnassignedDevicesFromDB, 
+  getAllDeviceForUserFromDB,updateDeviceType } from '../models/deviceModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -115,3 +82,20 @@ export const allDeviceForUser = async (req,res) => {
     res.status(500).json({ message: 'Error al obtener el dispositivo', error });
   }
 }
+
+export const updateTipoDispositivo = async (req, res) => {
+  const { id } = req.params;
+  const { id_tipo_dispositivo } = req.body;
+
+  try {
+    const updated = await updateDeviceType(id, id_tipo_dispositivo);
+    if (updated) {
+      res.json({ message: "Ícono del dispositivo actualizado correctamente" });
+    } else {
+      res.status(404).json({ error: "Dispositivo no encontrado o sin cambios" });
+    }
+  } catch (error) {
+    console.error("Error al actualizar el ícono:", error);
+    res.status(500).json({ error: "Error al actualizar el ícono" });
+  }
+};

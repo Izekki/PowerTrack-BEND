@@ -1,26 +1,3 @@
-/*import { db } from '../db/connection.js';
-
-
-export const getDeviceById = async (id) => {
-  const [rows] = await db.query('SELECT * FROM dispositivos WHERE id = ?', [id]);
-  return rows[0];
-};
-
-export const updateDevice = async (id, name, status) => {
-  const [result] = await db.query(
-    'UPDATE dispositivos SET nombre = ?, estado = ? WHERE id = ?',
-    [name, status, id]
-  );
-  return result.affectedRows;
-};
-
-export const createDevice = async (name, status) => {
-  const [result] = await db.query(
-    'INSERT INTO dispositivos (nombre, estado) VALUES (?, ?)', 
-    [name, status]
-  );
-  return result.insertId;  // Devuelve el ID del nuevo dispositivo
-};*/
 
 import { db } from '../db/connection.js';
 
@@ -74,7 +51,8 @@ export const getAllDeviceForUserFromDB = async (id) => {
         dispositivos.nombre AS dispositivo_nombre, 
         dispositivos.ubicacion, 
         dispositivos.usuario_id, 
-        dispositivos.id_grupo,  -- Añadido id_grupo
+        dispositivos.id_grupo,
+        dispositivos.id_tipo_dispositivo,
         grupos.nombre AS grupo_nombre
       FROM dispositivos
       LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
@@ -113,3 +91,10 @@ export const getDeviceByName = async (nombre, usuario_id) => {
   }
 };
 
+export const updateDeviceType = async (id, tipoId) => {
+  const [result] = await db.query(
+    "UPDATE dispositivos SET id_tipo_dispositivo = ? WHERE id = ?",
+    [tipoId, id]
+  );
+  return result.affectedRows;
+};
