@@ -2,6 +2,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { json } from 'express';
+import helmet from 'helmet';
 
 // Importar conexión a la base de datos
 import { connectDB } from './db/connection.js';
@@ -28,6 +29,7 @@ export const app = express();
 
 // Configuración de middlewares
 app.disable('x-powered-by');
+app.use(helmet());
 app.use(corsMiddleware());
 app.use(express.json());
 app.use(jsonErrorMiddleware);
