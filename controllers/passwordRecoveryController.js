@@ -4,7 +4,10 @@ import {
     verifyRecoveryToken, 
     updateUserPassword 
   } from '../models/passwordRecoveryModel.js'
-  import { sendMail } from '../utils/mailService.js'
+  import { sendMail } from '../utils/mailService.js';
+  import dotenv from 'dotenv';
+
+  dotenv.config();
   
   // Solicitar recuperación de contraseña
   export const requestPasswordRecovery = async (req, res) => {
@@ -20,9 +23,7 @@ import {
   
       const recoveryData = await createPasswordRecoveryRequest(correo);
       
-      // En un entorno real, enviarías un email con el enlace de recuperación
-      // Por ahora solo simulamos el envío
-      const resetLink = `http://localhost:5173/reset-password/${recoveryData.token}`;
+      const resetLink = `${process.env.URL_FRONT}/reset-password/${recoveryData.token}`;
       
       // Aquí implementarías el envío real del correo
       await sendMail({
