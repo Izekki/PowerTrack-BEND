@@ -18,6 +18,7 @@ import loginRouter from './routes/loginRouter.js';
 import userRouter from './routes/UserRouter.js';
 import supplierRouter from './routes/supplierRouter.js'
 import passwordRecoveryRouter from './routes/passwordRecoveryRouter.js';
+import sensorRouter from './routes/sensorRouter.js';
 //import cookieParser from 'cookie-parser'
 
 // Configuración inicial
@@ -43,6 +44,7 @@ app.use('/device' ,deviceRouter);
 app.use('/groups' ,groupRouter);
 app.use('/supplier',supplierRouter);
 app.use('/psR',passwordRecoveryRouter);
+app.use('/sensor',sensorRouter);
 
 
 // Ruta 404
