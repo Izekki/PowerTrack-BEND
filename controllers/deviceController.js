@@ -1,6 +1,7 @@
 import { getDeviceByIdFromDB, updateDevice, 
   createDevice, getAllDevices,getUnassignedDevicesFromDB, 
   getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
+import { findSensorById } from '../models/sensorModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -39,9 +40,14 @@ export const getDeviceById = async (req, res) => {
 }
 
 export const addDevice = async (req, res) => {
-  const { nombre, ubicacion, usuario_id, id_grupo, id_sensor } = req.body;  // Nuevos campos
+  const { nombre, ubicacion, usuario_id, id_grupo, id_sensor } = req.body;
 
   try {
+    const sensor = await findSensorById(id_sensor);
+    if(!sensor){
+      return res.status(400).json({ message: 'Sensor no encontrado' });
+    }
+    
     const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, id_sensor);
     res.status(201).json({ 
       message: 'Dispositivo creado exitosamente', 
