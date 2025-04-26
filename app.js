@@ -19,6 +19,8 @@ import userRouter from './routes/UserRouter.js';
 import supplierRouter from './routes/supplierRouter.js'
 import passwordRecoveryRouter from './routes/passwordRecoveryRouter.js';
 import sensorRouter from './routes/sensorRouter.js';
+import electricalRouter  from './routes/ElectricalAnalysisRouter.js';
+
 //import cookieParser from 'cookie-parser'
 
 // Configuración inicial
@@ -45,6 +47,7 @@ app.use('/groups' ,groupRouter);
 app.use('/supplier',supplierRouter);
 app.use('/psR',passwordRecoveryRouter);
 app.use('/sensor',sensorRouter);
+app.use('/electrical_analysis', electricalRouter);
 
 
 // Ruta 404
