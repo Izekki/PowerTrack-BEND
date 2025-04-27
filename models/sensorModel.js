@@ -16,5 +16,17 @@ export const findSensorById = async (sensorId) => {
     } catch (error) {
         throw new Error('Error al obtener el sensor por ID');
     }
-
 }
+
+export const findAssignedSensorById = async (sensorId) => {
+    try {
+      const [rows] = await db.query(
+        'SELECT * FROM sensores WHERE id = ? AND asignado = 1',
+        [sensorId]
+      );
+      return rows.length > 0 ? rows[0] : null;
+    } catch (error) {
+      console.error('Error al verificar sensor asignado:', error);
+      throw new Error('Error al verificar sensor asignado');
+    }
+  }
