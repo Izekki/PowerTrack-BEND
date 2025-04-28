@@ -33,12 +33,18 @@ export const findAssignedSensorById = async (sensorId) => {
 
   export const createSensor = async (mac) => {
     try {
-      const result = await db.query(
-        'INSERT INTO sensores (mac_address, asignado) VALUES (?, false)', 
-        [mac]
-      );
-      const sensorId = result.insertId;
+      // Contar cuántos sensores existen para poner el número secuencial
+      const [rows] = await db.query('SELECT COUNT(*) AS total FROM sensores');
+      const totalSensores = rows[0].total + 1; // +1 para el nuevo
   
+      const tipo = `Sensor ${totalSensores}`;
+  
+      const [result] = await db.query(
+        'INSERT INTO sensores (mac_address, tipo, asignado) VALUES (?, ?, false)', 
+        [mac, tipo]
+      );
+  
+      const sensorId = result.insertId;
       return sensorId;
     } catch (error) {
       console.error('Error al crear el sensor:', error);
@@ -46,16 +52,18 @@ export const findAssignedSensorById = async (sensorId) => {
     }
   };
   
+  
 
   export const findSensorByMac = async (mac) => {
     try {
-      const [sensor] = await db.query('SELECT * FROM sensores WHERE mac_address = ?', [mac]);
-      return sensor;
+      const [rows] = await db.query('SELECT * FROM sensores WHERE mac_address = ?', [mac]);
+      return rows.length > 0 ? rows[0] : null;
     } catch (error) {
       console.error('Error al buscar el sensor:', error);
       return null;
     }
   };
+  
 
   export const updateSensor = async (id, fields) => {
     const keys = Object.keys(fields);

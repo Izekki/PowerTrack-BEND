@@ -62,7 +62,10 @@ export const addDevice = async (req, res) => {
     const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, sensorId);
 
     // Actualizar el sensor: marcar como asignado Y asignarle dispositivo_id
-    await updateSensor(sensorId, { asignado: true, dispositivo_id: newDeviceId });
+    await updateSensor(sensorId, {
+        asignado: true,
+        dispositivo_id: newDeviceId
+       });
 
     res.status(201).json({ 
       message: 'Dispositivo y sensor creados exitosamente', 
