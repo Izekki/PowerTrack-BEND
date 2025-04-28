@@ -1,0 +1,2 @@
+De momento, el socket queda en pausa por espera de no saturar los datos
+de prueba, asi que se usara por coneccion a API REST

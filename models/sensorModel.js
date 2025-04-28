@@ -30,3 +30,44 @@ export const findAssignedSensorById = async (sensorId) => {
       throw new Error('Error al verificar sensor asignado');
     }
   }
+
+  export const createSensor = async (mac) => {
+    try {
+      const result = await db.query(
+        'INSERT INTO sensores (mac_address, asignado) VALUES (?, false)', 
+        [mac]
+      );
+      const sensorId = result.insertId;
+  
+      return sensorId;
+    } catch (error) {
+      console.error('Error al crear el sensor:', error);
+      return null;
+    }
+  };
+  
+
+  export const findSensorByMac = async (mac) => {
+    try {
+      const [sensor] = await db.query('SELECT * FROM sensores WHERE mac_address = ?', [mac]);
+      return sensor;
+    } catch (error) {
+      console.error('Error al buscar el sensor:', error);
+      return null;
+    }
+  };
+
+  export const updateSensor = async (id, fields) => {
+    const keys = Object.keys(fields);
+    const values = Object.values(fields);
+  
+    if (keys.length === 0) {
+      throw new Error('No hay campos para actualizar');
+    }
+  
+    const setClause = keys.map(key => `${key} = ?`).join(', ');
+  
+    const query = `UPDATE sensores SET ${setClause} WHERE id = ?`;
+    await db.query(query, [...values, id]);
+  };
+  
