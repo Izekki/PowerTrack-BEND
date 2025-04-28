@@ -1,7 +1,7 @@
 import { getDeviceByIdFromDB, updateDevice, 
   createDevice, getAllDevices,getUnassignedDevicesFromDB, 
   getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
-import { findSensorById } from '../models/sensorModel.js';
+import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -40,23 +40,53 @@ export const getDeviceById = async (req, res) => {
 }
 
 export const addDevice = async (req, res) => {
-  const { nombre, ubicacion, usuario_id, id_grupo, id_sensor } = req.body;
+  const { nombre, ubicacion, usuario_id, id_grupo, mac } = req.body;
 
   try {
-    const sensor = await findSensorById(id_sensor);
-    if(!sensor){
-      return res.status(400).json({ message: 'Sensor no encontrado' });
+    // Verificar si el sensor ya existe por su MAC
+    let existingSensor = await findSensorByMac(mac);
+    let sensorId;
+
+    if (!existingSensor) {
+      // Crear el sensor si no existe
+      const newSensorId = await createSensor(mac);
+      if (!newSensorId) {
+        return res.status(500).json({ message: 'Error al crear el sensor' });
+      }
+      sensorId = newSensorId;
+    } else {
+      sensorId = existingSensor.id;
     }
-    
-    const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, id_sensor);
+
+    // Crear el dispositivo, pasando el id del sensor
+    const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, sensorId);
+
+    // Actualizar el sensor: marcar como asignado Y asignarle dispositivo_id
+    await updateSensor(sensorId, {
+        asignado: true,
+        dispositivo_id: newDeviceId
+       });
+
     res.status(201).json({ 
-      message: 'Dispositivo creado exitosamente', 
-      id: newDeviceId 
+      message: 'Dispositivo y sensor creados exitosamente', 
+      dispositivo_id: newDeviceId,
+      sensor_id: sensorId
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error al crear el dispositivo', error });
+    res.status(500).json({ message: 'Error al crear el dispositivo y el sensor', error });
   }
 };
+
+
+const updateSensorAssignment = async (sensorId, isAssigned) => {
+  try {
+    await updateSensor(sensorId, { asignado: isAssigned });
+  } catch (error) {
+    console.error('Error al actualizar el sensor:', error);
+  }
+};
+
+
 
 export const getDevices = async (req, res) => {
   try {
