@@ -49,7 +49,7 @@ export const addDevice = async (req, res) => {
 
     if (!existingSensor) {
       // Crear el sensor si no existe
-      const newSensorId = await createSensor(mac);
+      const newSensorId = await createSensor(mac, usuario_id);
       if (!newSensorId) {
         return res.status(500).json({ message: 'Error al crear el sensor' });
       }
