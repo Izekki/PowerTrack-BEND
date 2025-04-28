@@ -34,10 +34,8 @@ export const findAssignedSensorById = async (sensorId) => {
   export const createSensor = async (mac) => {
     try {
       // Contar cuántos sensores existen para poner el número secuencial
-      const [rows] = await db.query('SELECT COUNT(*) AS total FROM sensores');
-      const totalSensores = rows[0].total + 1; // +1 para el nuevo
-  
-      const tipo = `Sensor ${totalSensores}`;
+     
+      const tipo = `Sensor Nuevo`;
   
       const [result] = await db.query(
         'INSERT INTO sensores (mac_address, tipo, asignado) VALUES (?, ?, false)', 
