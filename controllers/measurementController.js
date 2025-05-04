@@ -3,9 +3,18 @@ import { findSensorByMac } from "../models/sensorModel.js";
 import { saveMeasurement } from "../models/measurementModel.js";
 
 export const createMeasurement = async (req, res) => {
-  console.log(req.body)
+  console.log(req.body);
   try {
-    const { mac_address, voltaje, corriente, potencia, factor_potencia, energia, frecuencia } = req.body;
+    const {
+      mac_address,
+      voltaje,
+      corriente,
+      potencia,
+      factor_potencia,
+      energia,
+      frecuencia,
+      timestamp
+    } = req.body;
 
     if (
       !mac_address ||
@@ -14,12 +23,12 @@ export const createMeasurement = async (req, res) => {
       potencia == null ||
       factor_potencia == null ||
       energia == null ||
-      frecuencia == null
+      frecuencia == null ||
+      !timestamp
     ) {
       return res.status(400).json({ message: "Datos incompletos" });
     }
 
-    // Buscar el sensor por su mac_address
     const sensor = await findSensorByMac(mac_address);
 
     if (!sensor) {
@@ -28,8 +37,17 @@ export const createMeasurement = async (req, res) => {
 
     const sensorId = sensor.id;
 
-    // Guardar la medición con el sensorId
-    await saveMeasurement(sensorId, voltaje, corriente, potencia, factor_potencia, energia, frecuencia);
+    // Guardar la medición con la fecha proporcionada por el sensor
+    await saveMeasurement(
+      sensorId,
+      voltaje,
+      corriente,
+      potencia,
+      factor_potencia,
+      energia,
+      frecuencia,
+      new Date(timestamp)
+    );
 
     res.status(201).json({ message: "Medición guardada correctamente" });
   } catch (error) {

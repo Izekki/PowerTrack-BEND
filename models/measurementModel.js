@@ -8,11 +8,10 @@ export const saveMeasurement = async (
   potencia,
   factor_potencia,
   energia,
-  frecuencia
+  frecuencia,
+  fechaHora
 ) => {
   try {
-    const fechaHora = new Date(); // Fecha actual
-
     const query = `
       INSERT INTO mediciones
         (sensor_id, voltaje, corriente, potencia, factor_potencia, fecha_hora, energia, frecuencia)
