@@ -1,7 +1,7 @@
 import { getDeviceByIdFromDB, updateDevice, 
-        createDevice, getAllDevices,getUnassignedDevicesFromDB, 
-        getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
-import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
+  createDevice, getAllDevices,getUnassignedDevicesFromDB, 
+  getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
+import { findSensorByMac,createSensor,updateSensor,findSensorByMacAndUser } from '../models/sensorModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -43,36 +43,38 @@ export const addDevice = async (req, res) => {
   const { nombre, ubicacion, usuario_id, id_grupo, mac } = req.body;
 
   try {
-    // Verificar si el sensor ya existe por su MAC
-    let existingSensor = await findSensorByMac(mac);
-    let sensorId;
-
-    if (!existingSensor) {
-      // Crear el sensor si no existe
-      const newSensorId = await createSensor(mac, usuario_id);
-      if (!newSensorId) {
-        return res.status(500).json({ message: 'Error al crear el sensor' });
-      }
-      sensorId = newSensorId;
-    } else {
-      sensorId = existingSensor.id;
+    // Verificar si el usuario ya tiene un sensor con esa MAC
+    const existingSensor = await findSensorByMacAndUser(mac, usuario_id);
+    
+    if (existingSensor) {
+      return res.status(400).json({ 
+        message: 'Este usuario ya tiene un sensor registrado con esta MAC.' 
+      });
     }
 
-    // Crear el dispositivo, pasando el id del sensor
-    const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, sensorId);
+    // Crear el sensor
+    const newSensorId = await createSensor(mac, usuario_id);
+    if (!newSensorId) {
+      return res.status(500).json({ message: 'Error al crear el sensor' });
+    }
 
-    // Actualizar el sensor: marcar como asignado Y asignarle dispositivo_id
-    await updateSensor(sensorId, {
-        asignado: true,
-        dispositivo_id: newDeviceId
-       });
+    // Crear el dispositivo asociado
+    const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, newSensorId);
+
+    // Actualizar el sensor con estado de asignado y dispositivo_id
+    await updateSensor(newSensorId, {
+      asignado: true,
+      dispositivo_id: newDeviceId
+    });
 
     res.status(201).json({ 
       message: 'Dispositivo y sensor creados exitosamente', 
       dispositivo_id: newDeviceId,
-      sensor_id: sensorId
+      sensor_id: newSensorId
     });
+
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Error al crear el dispositivo y el sensor', error });
   }
 };

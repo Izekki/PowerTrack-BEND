@@ -59,6 +59,21 @@ export const findAssignedSensorById = async (sensorId) => {
       return null;
     }
   };
+
+
+  export const findSensorByMacAndUser = async (mac, usuario_id) => {
+    try {
+      const [rows] = await db.query(
+        'SELECT * FROM sensores WHERE mac_address = ? AND usuario_id = ?',
+        [mac, usuario_id]
+      );
+      return rows.length > 0 ? rows[0] : null;
+    } catch (error) {
+      console.error('Error al buscar el sensor por MAC y usuario:', error);
+      return null;
+    }
+  };
+  
   
 
   export const updateSensor = async (id, fields) => {
