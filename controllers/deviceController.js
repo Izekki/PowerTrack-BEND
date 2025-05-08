@@ -1,6 +1,6 @@
 import { getDeviceByIdFromDB, updateDevice, 
-  createDevice, getAllDevices,getUnassignedDevicesFromDB, 
-  getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
+        createDevice, getAllDevices,getUnassignedDevicesFromDB, 
+        getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
 import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
 
 export const editDevice = async (req, res) => {
