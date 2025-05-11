@@ -53,6 +53,7 @@ export const getAllDeviceForUserFromDB = async (id) => {
         dispositivos.usuario_id, 
         dispositivos.id_grupo,
         dispositivos.id_tipo_dispositivo,
+        dispositivos.id_sensor,
         grupos.nombre AS grupo_nombre
       FROM dispositivos
       LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
