@@ -106,7 +106,7 @@ export const getProfileByIdDB = async (userId) => {
         let currentProvider = null;
         if (userProfile.id_proveedor) {
             const [prov] = await db.query(
-                `SELECT id, nombre, tarifas 
+                `SELECT id, nombre
                  FROM proveedores WHERE id = ?`,
                 [userProfile.id_proveedor]
             );
@@ -115,7 +115,7 @@ export const getProfileByIdDB = async (userId) => {
 
         // Obtener TODOS los proveedores disponibles
         const [allProviders] = await db.query(
-            `SELECT id, nombre, tarifas 
+            `SELECT id, nombre
              FROM proveedores`
         );
 

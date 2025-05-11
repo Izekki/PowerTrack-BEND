@@ -1,4 +1,5 @@
 import ElectricalAnalysisModel from "../models/ElectricalAnalysisModel.js";
+import {getAllDeviceForUserFromDB,getDeviceByIdFromDB} from "../models/deviceModel.js";
 
 class ElectricalAnalysisController {
 
@@ -229,7 +230,89 @@ class ElectricalAnalysisController {
         .json({ message: "Error al obtener el consumo actual", error: error.message });
     }
   };
-  
+
+  getDispositivosPorUsuarioConsumo = async (req, res) => {
+  console.log(req.params)
+  const { idUsuario } = req.params;
+
+
+  if (!idUsuario) {
+    return res.status(400).json({ message: "El usuario no fue encontrado con dispositivos" });
+  }
+
+  try {
+    const dispositivos = await getAllDeviceForUserFromDB(idUsuario);
+
+    if (!dispositivos || dispositivos.length === 0) {
+      return res.status(404).json({ message: "No se encontraron dispositivos para este usuario." });
+    }
+
+    console.log(dispositivos)
+    const resultados = await Promise.all(dispositivos.map(async (dispositivo) => {
+    const datosConsumo = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
+      return {
+        dispositivo_id: dispositivo.id,
+        dispositivo_nombre: dispositivo.dispositivo_nombre,
+        consumoActual: parseFloat(datosConsumo?.consumoActualKWh?.toFixed(6) || 0),
+        unidad: datosConsumo.unidad,
+        costoActual: parseFloat(datosConsumo.costoPorMedicion)
+      };
+    }));
+
+    return res.status(200).json(resultados);
+
+
+  } catch (error) {
+    console.error("Error al obtener dispositivos con el consumo:", error);
+    return res.status(500).json({ message: "Error al obtener dispositivos con el consumo", error: error.message });
+  }
+};
+
+  getConsumoDetalladoPorDispositivo = async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({ message: "El ID del dispositivo es requerido." });
+  }
+
+  try {
+    // Buscar el dispositivo para obtener el sensor_id
+    const dispositivo = await getDeviceByIdFromDB(id);
+    if (!dispositivo) {
+      return res.status(404).json({ message: "Dispositivo no encontrado." });
+    }
+
+    const datosConsumo = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
+
+    return res.status(200).json({
+      dispositivo_id: dispositivo.id,
+      dispositivo_nombre: dispositivo.dispositivo_nombre,
+      ...datosConsumo,
+    });
+
+  } catch (error) {
+    console.error("Error al obtener el consumo detallado:", error);
+    return res.status(500).json({
+      message: "Error al obtener el consumo detallado del dispositivo.",
+      error: error.message,
+    });
+  }
+};
+
+  getConsumoPorDispositivosYGrupos = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const datos = await this.electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuario(id);
+    res.status(200).json(datos);
+  } catch (error) {
+    res.status(500).json({
+      mensaje: 'Error al obtener el consumo por dispositivos y grupos del usuario',
+      error: error.message,
+    });
+  }
+};
+
 
 
 
