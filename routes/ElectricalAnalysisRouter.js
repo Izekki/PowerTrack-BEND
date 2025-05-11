@@ -11,6 +11,7 @@ router.get('/potencia_activa_d/:id', eac.getPotenciaActiva);
 router.get('/frecuencia_d/:id', eac.getFrecuencia);
 router.get('/factor_potencia_d/:id', eac.getFactorPotencia);
 router.get('/consumo_d/:id', eac.getConsumo);
+router.get('/dispositivo/:id/consumo-actual',eac.getConsumoActual);
 
 router.use((req, res) => {
     res.status(404).send({ error: 'Ruta de analisis electrico no encontrada: ' + req.url })

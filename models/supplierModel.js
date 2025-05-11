@@ -55,16 +55,20 @@ export class SupplierModel {
     // Obtener todos los proveedores
     static async getSuppliers() {
         let suppliers = null;
-
+    
         try {
-            [suppliers] = await db.query('SELECT id, nombre, tarifas FROM proveedores');
+            [suppliers] = await db.query(`
+                SELECT id, nombre, cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, region, demanda_minima, factor_carga 
+                FROM proveedores
+            `);
         } catch (error) {
             console.log(error.message);
             throw new DBConnectionError('Ocurrió un error al obtener los proveedores');
         }
-
+    
         return suppliers;
     }
+    
 
     // Obtener un proveedor por su ID
     static async getSupplierById(id) {

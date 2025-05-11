@@ -213,6 +213,24 @@ class ElectricalAnalysisController {
   };
 
 
+  getConsumoActual = async (req, res) => {
+    const { id } = req.params;
+  
+    if (!id) {
+      return res.status(400).json({ message: "ID del dispositivo requerido" });
+    }
+  
+    try {
+      const datos = await this.electricalAnalysisModel.getConsumoActual(id);
+      res.status(200).json(datos);
+    } catch (error) {
+      res
+        .status(500)
+        .json({ message: "Error al obtener el consumo actual", error: error.message });
+    }
+  };
+  
+
 
 
 

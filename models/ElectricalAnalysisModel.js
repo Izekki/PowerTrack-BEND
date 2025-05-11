@@ -139,6 +139,53 @@ getConsumo = async (idDispositivo, parametros) => {
   }
 };
 
+getConsumoActual = async (idDispositivo) => {
+  try {
+    const consultaUltimaMedicion = `
+      SELECT m.potencia AS valor, m.fecha_hora
+      FROM mediciones m
+      INNER JOIN sensores s ON m.sensor_id = s.id
+      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+      WHERE d.id = ?
+      ORDER BY m.fecha_hora DESC
+      LIMIT 1
+    `;
+
+    const [filas] = await db.query(consultaUltimaMedicion, [idDispositivo]);
+
+    if (!filas.length) {
+      return {
+        mensaje: "No hay mediciones disponibles para este dispositivo",
+        consumoActual: 0,
+        costoActualMXN: 0,
+      };
+    }
+
+    const ultima = filas[0];
+    const minutosPorMedicion = 5;
+    const horasPorMedicion = minutosPorMedicion / 60; // 0.0833
+    const tarifaPorKWh = 6.5;
+
+    const consumoActual = (ultima.valor / 1000) * horasPorMedicion;
+    const costoActualMXN = consumoActual * tarifaPorKWh;
+
+    return {
+      id: idDispositivo,
+      fechaMedicion: ultima.fecha_hora,
+      potenciaW: ultima.valor,
+      consumoActual,
+      costoActualMXN,
+      unidad: "kWh",
+      tarifaAplicada: tarifaPorKWh,
+      mensaje: "Consumo actual estimado en base a la última medición registrada",
+    };
+  } catch (error) {
+    console.error("Error al obtener el consumo actual:", error);
+    throw error;
+  }
+};
+
+
 
 
 }
