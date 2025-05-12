@@ -284,10 +284,30 @@ class ElectricalAnalysisController {
 
     const datosConsumo = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
 
+    // Conversión explícita a float de los datos numéricos
+    const datosConvertidos = {
+      sensor_id: datosConsumo.sensor_id,
+      fechaMedicion: datosConsumo.fechaMedicion,
+      potenciaW: parseFloat(datosConsumo.potenciaW),
+      consumoActualKWh: parseFloat(datosConsumo.consumoActualKWh),
+      costoPorMedicion: parseFloat(datosConsumo.costoPorMedicion),
+      estimacionCostoDiario: parseFloat(datosConsumo.estimacionCostoDiario),
+      estimacionCostoMensual: parseFloat(datosConsumo.estimacionCostoMensual),
+      unidad: datosConsumo.unidad,
+      proveedor: datosConsumo.proveedor,
+      detalleTarifas: {
+        cargo_variable: parseFloat(datosConsumo.detalleTarifas.cargo_variable),
+        cargo_fijo: parseFloat(datosConsumo.detalleTarifas.cargo_fijo),
+        cargo_distribucion: parseFloat(datosConsumo.detalleTarifas.cargo_distribucion),
+        cargo_capacidad: parseFloat(datosConsumo.detalleTarifas.cargo_capacidad),
+      },
+      mensaje: datosConsumo.mensaje
+    };
+
     return res.status(200).json({
       dispositivo_id: dispositivo.id,
       dispositivo_nombre: dispositivo.dispositivo_nombre,
-      ...datosConsumo,
+      ...datosConvertidos,
     });
 
   } catch (error) {
@@ -298,6 +318,7 @@ class ElectricalAnalysisController {
     });
   }
 };
+
 
   getConsumoPorDispositivosYGrupos = async (req, res) => {
   const { id } = req.params;
