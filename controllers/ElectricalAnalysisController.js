@@ -231,10 +231,13 @@ class ElectricalAnalysisController {
     }
   };
 
-  getDispositivosPorUsuarioConsumo = async (req, res) => {
-  console.log(req.params)
-  const { idUsuario } = req.params;
 
+
+
+
+  getDispositivosPorUsuarioConsumo = async (req, res) => {
+  console.log(req.params);
+  const { idUsuario } = req.params;
 
   if (!idUsuario) {
     return res.status(400).json({ message: "El usuario no fue encontrado con dispositivos" });
@@ -247,28 +250,54 @@ class ElectricalAnalysisController {
       return res.status(404).json({ message: "No se encontraron dispositivos para este usuario." });
     }
 
-    console.log(dispositivos)
+    console.log(dispositivos);
     const resultados = await Promise.all(dispositivos.map(async (dispositivo) => {
-    const datosConsumo = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
-      return {
-        dispositivo_id: dispositivo.id,
-        dispositivo_nombre: dispositivo.dispositivo_nombre,
-        consumoActual: parseFloat(datosConsumo?.consumoActualKWh?.toFixed(6) || 0),
-        unidad: datosConsumo.unidad,
-        costoActual: parseFloat(datosConsumo.costoPorMedicion)
-      };
+      try {
+        const datosConsumo = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
+
+        // Manejo seguro de valores posiblesmente undefined/null
+        const consumoActual = datosConsumo?.consumoActualKWh 
+          ? parseFloat(datosConsumo.consumoActualKWh.toFixed(6)) 
+          : 0;
+          
+        const costoActual = datosConsumo?.costoPorMedicion 
+          ? parseFloat(datosConsumo.costoPorMedicion.toFixed(6)) 
+          : 0;
+
+        return {
+          dispositivo_id: dispositivo.id,
+          dispositivo_nombre: dispositivo.dispositivo_nombre,
+          consumoActual: consumoActual,
+          unidad: datosConsumo?.unidad || 'kWh',
+          costoActual: costoActual,
+          fechaMedicion: datosConsumo?.fechaMedicion || null
+        };
+      } catch (error) {
+        console.error(`Error procesando dispositivo ${dispositivo.id}:`, error);
+        return {
+          dispositivo_id: dispositivo.id,
+          dispositivo_nombre: dispositivo.dispositivo_nombre,
+          consumoActual: 0,
+          unidad: 'kWh',
+          costoActual: 0,
+          fechaMedicion: null,
+          error: "Error al obtener datos de consumo"
+        };
+      }
     }));
 
     return res.status(200).json(resultados);
 
-
   } catch (error) {
     console.error("Error al obtener dispositivos con el consumo:", error);
-    return res.status(500).json({ message: "Error al obtener dispositivos con el consumo", error: error.message });
+    return res.status(500).json({ 
+      message: "Error al obtener dispositivos con el consumo", 
+      error: error.message 
+    });
   }
 };
 
-  getConsumoDetalladoPorDispositivo = async (req, res) => {
+getConsumoDetalladoPorDispositivo = async (req, res) => {
   const { id } = req.params;
 
   if (!id) {
@@ -276,7 +305,6 @@ class ElectricalAnalysisController {
   }
 
   try {
-    // Buscar el dispositivo para obtener el sensor_id
     const dispositivo = await getDeviceByIdFromDB(id);
     if (!dispositivo) {
       return res.status(404).json({ message: "Dispositivo no encontrado." });
@@ -284,31 +312,37 @@ class ElectricalAnalysisController {
 
     const datosConsumo = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
 
-    // Conversión explícita a float de los datos numéricos
-    const datosConvertidos = {
+    // Formatear todos los números con sus decimales correspondientes
+    const response = {
+      dispositivo_id: dispositivo.id,
+      dispositivo_nombre: dispositivo.dispositivo_nombre,
       sensor_id: datosConsumo.sensor_id,
       fechaMedicion: datosConsumo.fechaMedicion,
-      potenciaW: parseFloat(datosConsumo.potenciaW),
-      consumoActualKWh: parseFloat(datosConsumo.consumoActualKWh),
-      costoPorMedicion: parseFloat(datosConsumo.costoPorMedicion),
-      estimacionCostoDiario: parseFloat(datosConsumo.estimacionCostoDiario),
-      estimacionCostoMensual: parseFloat(datosConsumo.estimacionCostoMensual),
+      potenciaW: parseFloat(datosConsumo.potenciaW.toFixed(2)),
+      consumoActualKWh: parseFloat(datosConsumo.consumoActualKWh.toFixed(6)),
+      costoPorMedicion: parseFloat(datosConsumo.costoPorMedicion.toFixed(6)),
+      estimacionCostoDiario: parseFloat(datosConsumo.estimacionCostoDiario.toFixed(2)),
+      estimacionConsumoMensualKWh: parseFloat(datosConsumo.estimacionConsumoMensualKWh.toFixed(2)),
+      estimacionDemandaKW: parseFloat(datosConsumo.estimacionDemandaKW.toFixed(4)),
+      estimacionCostoMensual: parseFloat(datosConsumo.estimacionCostoMensual.toFixed(2)),
       unidad: datosConsumo.unidad,
       proveedor: datosConsumo.proveedor,
       detalleTarifas: {
-        cargo_variable: parseFloat(datosConsumo.detalleTarifas.cargo_variable),
-        cargo_fijo: parseFloat(datosConsumo.detalleTarifas.cargo_fijo),
-        cargo_distribucion: parseFloat(datosConsumo.detalleTarifas.cargo_distribucion),
-        cargo_capacidad: parseFloat(datosConsumo.detalleTarifas.cargo_capacidad),
+        cargo_variable: parseFloat(datosConsumo.detalleTarifas.cargo_variable.toFixed(6)),
+        cargo_fijo: parseFloat(datosConsumo.detalleTarifas.cargo_fijo.toFixed(6)),
+        cargo_distribucion: parseFloat(datosConsumo.detalleTarifas.cargo_distribucion.toFixed(6)),
+        cargo_capacidad: parseFloat(datosConsumo.detalleTarifas.cargo_capacidad.toFixed(6)),
+      },
+      detalleCostos: {
+        consumo: parseFloat(datosConsumo.detalleCostos.consumo.toFixed(2)),
+        capacidad: parseFloat(datosConsumo.detalleCostos.capacidad.toFixed(2)),
+        distribucion: parseFloat(datosConsumo.detalleCostos.distribucion.toFixed(2)),
+        fijo: parseFloat(datosConsumo.detalleCostos.fijo.toFixed(2)),
       },
       mensaje: datosConsumo.mensaje
     };
 
-    return res.status(200).json({
-      dispositivo_id: dispositivo.id,
-      dispositivo_nombre: dispositivo.dispositivo_nombre,
-      ...datosConvertidos,
-    });
+    return res.status(200).json(response);
 
   } catch (error) {
     console.error("Error al obtener el consumo detallado:", error);
@@ -318,6 +352,10 @@ class ElectricalAnalysisController {
     });
   }
 };
+
+
+
+
 
 
   getConsumoPorDispositivosYGrupos = async (req, res) => {
