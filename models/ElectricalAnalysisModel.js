@@ -141,7 +141,6 @@ getConsumo = async (idDispositivo, parametros) => {
 
 getConsumoActual = async (idSensor) => {
   try {
-    // 1. Obtener última medición del sensor
     const consultaUltimaMedicion = `
       SELECT m.potencia AS valor, m.fecha_hora
       FROM mediciones m
@@ -161,7 +160,6 @@ getConsumoActual = async (idSensor) => {
 
     const ultima = filasMedicion[0];
 
-    // 2. Obtener datos del proveedor CFE
     const consultaProveedor = `SELECT * FROM proveedores WHERE nombre = 'CFE' LIMIT 1;`;
     const [filasProveedor] = await db.query(consultaProveedor);
 
@@ -171,53 +169,67 @@ getConsumoActual = async (idSensor) => {
 
     const proveedor = filasProveedor[0];
 
-    // 3. Constantes de medición
+    // Parsear todos los cargos del proveedor a números
+    const cargo_variable = parseFloat(proveedor.cargo_variable || 0);
+    const cargo_capacidad = parseFloat(proveedor.cargo_capacidad || 0);
+    const cargo_distribucion = parseFloat(proveedor.cargo_distribucion || 0);
+    const cargo_fijo = parseFloat(proveedor.cargo_fijo || 0);
+
     const minutosPorMedicion = 5;
-    const horasPorMedicion = minutosPorMedicion / 60; // 0.0833 h
-    const medicionesPorDia = 24 * 60 / minutosPorMedicion; // 288
+    const horasPorMedicion = minutosPorMedicion / 60;
+    const medicionesPorDia = 24 * 60 / minutosPorMedicion;
     const diasPorMes = 30;
-    const medicionesPorMes = medicionesPorDia * diasPorMes; // 8640
+    const medicionesPorMes = medicionesPorDia * diasPorMes;
+    const factorCarga = 0.9;
 
-    // 4. Consumo actual en kWh (de una medición)
-    const consumoActual = (ultima.valor / 1000) * horasPorMedicion;
+    const potenciaW = parseFloat(ultima.valor || 0);
+    const consumoMedicionKWh = (potenciaW / 1000) * horasPorMedicion;
+    const consumoMensualKWh = consumoMedicionKWh * medicionesPorMes;
+    const demandaKW = consumoMensualKWh / (24 * diasPorMes * factorCarga);
 
-    // 5. Costo variable por medición
-    const costoVariable = consumoActual * proveedor.cargo_variable;
-
-    // 6. Cargos fijos prorrateados por medición
-    const prorrateoFijo = proveedor.cargo_fijo / medicionesPorMes;
-    const prorrateoDistribucion = proveedor.cargo_distribucion / medicionesPorMes;
-    const prorrateoCapacidad = proveedor.cargo_capacidad / medicionesPorMes;
-
-    const costoTotalPorMedicion = costoVariable + prorrateoFijo + prorrateoDistribucion + prorrateoCapacidad;
-
-    // 7. Estimación diaria y mensual
-    const costoDiario = costoTotalPorMedicion * medicionesPorDia;
-    const costoMensual = costoTotalPorMedicion * medicionesPorMes;
+    // Cálculos de costos
+    const costoConsumo = consumoMensualKWh * cargo_variable;
+    const costoCapacidad = demandaKW * cargo_capacidad;
+    const costoDistribucion = demandaKW * cargo_distribucion;
+    const costoFijo = cargo_fijo;
+    const costoMensualTotal = costoConsumo + costoCapacidad + costoDistribucion + costoFijo;
+    
+    // Nuevos cálculos
+    const costoPorMedicion = costoMensualTotal / medicionesPorMes;
+    const estimacionCostoDiario = costoPorMedicion * medicionesPorDia;
 
     return {
       sensor_id: idSensor,
       fechaMedicion: ultima.fecha_hora,
-      potenciaW: ultima.valor,
-      consumoActualKWh: consumoActual,
-      costoPorMedicion: costoTotalPorMedicion.toFixed(2),
-      estimacionCostoDiario: costoDiario.toFixed(2),
-      estimacionCostoMensual: costoMensual.toFixed(2),
+      potenciaW: potenciaW,
+      consumoActualKWh: consumoMedicionKWh,
+      costoPorMedicion: costoPorMedicion,
+      estimacionCostoDiario: estimacionCostoDiario,
+      estimacionConsumoMensualKWh: consumoMensualKWh,
+      estimacionDemandaKW: demandaKW,
+      estimacionCostoMensual: costoMensualTotal,
       unidad: "kWh",
       proveedor: proveedor.nombre,
       detalleTarifas: {
-        cargo_variable: proveedor.cargo_variable,
-        cargo_fijo: proveedor.cargo_fijo,
-        cargo_distribucion: proveedor.cargo_distribucion,
-        cargo_capacidad: proveedor.cargo_capacidad,
+        cargo_variable: cargo_variable,
+        cargo_capacidad: cargo_capacidad,
+        cargo_distribucion: cargo_distribucion,
+        cargo_fijo: cargo_fijo
       },
-      mensaje: "Costo estimado por consumo con base en tarifas reales del proveedor CFE",
+      detalleCostos: {
+        consumo: costoConsumo,
+        capacidad: costoCapacidad,
+        distribucion: costoDistribucion,
+        fijo: costoFijo,
+      },
+      mensaje: "Estimación de consumo y costos según tarifas de CFE",
     };
   } catch (error) {
     console.error("Error al obtener el consumo actual:", error);
     throw error;
   }
 };
+
 
 
 
@@ -231,60 +243,80 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
     if (!tarifas.length) throw new Error("No se encontró información de tarifas");
 
     const tarifa = tarifas[0];
-    const tarifaPorKWh = tarifa.cargo_variable;
 
-    // Obtener todos los dispositivos con sensor asignado del usuario
+    // Obtener dispositivos (con sensores) del usuario
     const [dispositivos] = await db.query(`
-      SELECT d.id AS dispositivo_id, d.nombre, d.id_grupo, s.id AS sensor_id
+      SELECT d.id AS dispositivo_id, d.nombre, d.id_grupo, d.id_sensor
       FROM dispositivos d
-      INNER JOIN sensores s ON d.id_sensor = s.id
       WHERE d.usuario_id = ?
     `, [id_usuario]);
 
-    if (!dispositivos.length) return { mensaje: "No hay dispositivos con sensores asignados para este usuario" };
+    if (!dispositivos.length) return { mensaje: "No hay dispositivos para este usuario" };
 
+    // Constantes
     const minutosPorMedicion = 5;
-    const horasPorMedicion = minutosPorMedicion / 60;
+    const horasPorMedicion = minutosPorMedicion / 60; // 0.0833
+    const medicionesPorDia = 24 * 60 / minutosPorMedicion; // 288
+    const diasPorMes = 30;
+    const medicionesPorMes = medicionesPorDia * diasPorMes;
 
     let resultados = [];
     let grupos = {};
 
     for (const dispositivo of dispositivos) {
+      // Obtener última medición del sensor
       const [mediciones] = await db.query(`
         SELECT potencia, fecha_hora FROM mediciones
         WHERE sensor_id = ?
         ORDER BY fecha_hora DESC
         LIMIT 1
-      `, [dispositivo.sensor_id]);
+      `, [dispositivo.id_sensor]);
 
       if (!mediciones.length) continue;
 
       const ultima = mediciones[0];
       const potencia = ultima.potencia;
 
+      // Consumo por medición en kWh
       const consumoActual = (potencia / 1000) * horasPorMedicion;
-      const costoActual = consumoActual * tarifaPorKWh;
 
-      const consumoDiario = consumoActual * (60 / minutosPorMedicion) * 24; // 288 lecturas/día
-      const consumoMensual = consumoDiario * 30;
-      const costoDiario = consumoDiario * tarifaPorKWh;
-      const costoMensual = consumoMensual * tarifaPorKWh;
+      // Costo variable por consumo
+      const costoVariable = consumoActual * tarifa.cargo_variable;
+
+      // Cargos prorrateados por medición
+      const prorrateoFijo = tarifa.cargo_fijo / medicionesPorMes;
+      const prorrateoDistribucion = tarifa.cargo_distribucion / medicionesPorMes;
+      const prorrateoCapacidad = tarifa.cargo_capacidad / medicionesPorMes;
+
+      const costoPorMedicion = costoVariable + prorrateoFijo + prorrateoDistribucion + prorrateoCapacidad;
+
+      // Estimaciones
+      const consumoDiario = consumoActual * medicionesPorDia;
+      const consumoMensual = consumoDiario * diasPorMes;
+
+      const costoDiario = costoPorMedicion * medicionesPorDia;
+      const costoMensual = costoPorMedicion * medicionesPorMes;
 
       const resultado = {
         dispositivo_id: dispositivo.dispositivo_id,
         nombre: dispositivo.nombre,
         grupo_id: dispositivo.id_grupo,
-        sensor_id: dispositivo.sensor_id,
+        sensor_id: dispositivo.id_sensor,
         fechaMedicion: ultima.fecha_hora,
         potenciaW: potencia,
-        consumoActual,
-        consumoDiario,
-        consumoMensual,
-        costoActualMXN: costoActual,
-        costoDiarioMXN: costoDiario,
-        costoMensualMXN: costoMensual,
-        tarifaAplicada: tarifaPorKWh,
+        consumoActualKWh: consumoActual,
+        consumoDiarioKWh: consumoDiario,
+        consumoMensualKWh: consumoMensual,
+        costoPorMedicionMXN: costoPorMedicion.toFixed(2),
+        costoDiarioMXN: costoDiario.toFixed(2),
+        costoMensualMXN: costoMensual.toFixed(2),
         unidad: "kWh",
+        detalleTarifas: {
+          cargo_variable: tarifa.cargo_variable,
+          cargo_fijo: tarifa.cargo_fijo,
+          cargo_distribucion: tarifa.cargo_distribucion,
+          cargo_capacidad: tarifa.cargo_capacidad,
+        }
       };
 
       resultados.push(resultado);
@@ -294,22 +326,22 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
         grupos[dispositivo.id_grupo] = {
           grupo_id: dispositivo.id_grupo,
           dispositivos: [],
-          consumoTotal: 0,
-          costoTotal: 0,
-          consumoDiarioTotal: 0,
-          costoDiarioTotal: 0,
-          consumoMensualTotal: 0,
-          costoMensualTotal: 0,
+          consumoTotalKWh: 0,
+          costoTotalMXN: 0,
+          consumoDiarioTotalKWh: 0,
+          costoDiarioTotalMXN: 0,
+          consumoMensualTotalKWh: 0,
+          costoMensualTotalMXN: 0,
         };
       }
 
       grupos[dispositivo.id_grupo].dispositivos.push(resultado);
-      grupos[dispositivo.id_grupo].consumoTotal += consumoActual;
-      grupos[dispositivo.id_grupo].costoTotal += costoActual;
-      grupos[dispositivo.id_grupo].consumoDiarioTotal += consumoDiario;
-      grupos[dispositivo.id_grupo].costoDiarioTotal += costoDiario;
-      grupos[dispositivo.id_grupo].consumoMensualTotal += consumoMensual;
-      grupos[dispositivo.id_grupo].costoMensualTotal += costoMensual;
+      grupos[dispositivo.id_grupo].consumoTotalKWh += consumoActual;
+      grupos[dispositivo.id_grupo].costoTotalMXN += parseFloat(costoPorMedicion.toFixed(2));
+      grupos[dispositivo.id_grupo].consumoDiarioTotalKWh += consumoDiario;
+      grupos[dispositivo.id_grupo].costoDiarioTotalMXN += parseFloat(costoDiario.toFixed(2));
+      grupos[dispositivo.id_grupo].consumoMensualTotalKWh += consumoMensual;
+      grupos[dispositivo.id_grupo].costoMensualTotalMXN += parseFloat(costoMensual.toFixed(2));
     }
 
     return {
@@ -321,6 +353,7 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
     throw error;
   }
 };
+
 
 
 
