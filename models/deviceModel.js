@@ -92,13 +92,73 @@ export const getDeviceByName = async (nombre, usuario_id) => {
   }
 };
 
-export const updateDeviceType = async (id, tipoId) => {
-  const [result] = await db.query(
-    "UPDATE dispositivos SET id_tipo_dispositivo = ? WHERE id = ?",
-    [tipoId, id]
-  );
-  return result.affectedRows;
+export const updateDeviceType = async (idDispositivo, tipoId) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Actualizar el tipo del dispositivo
+    const [updateResult] = await connection.query(
+      "UPDATE dispositivos SET id_tipo_dispositivo = ? WHERE id = ?",
+      [tipoId, idDispositivo]
+    );
+
+    if (updateResult.affectedRows === 0) {
+      throw new Error('No se actualizó ningún dispositivo');
+    }
+
+    // 2. Obtener el usuario del dispositivo
+    const [[dispositivo]] = await connection.query(
+      "SELECT usuario_id FROM dispositivos WHERE id = ?",
+      [idDispositivo]
+    );
+
+    const usuarioId = dispositivo.usuario_id;
+
+    // 3. Obtener detalles del nuevo tipo
+    const [[tipo]] = await connection.query(
+      "SELECT nombre, consumo_maximo_w FROM tipos_dispositivos WHERE id = ?",
+      [tipoId]
+    );
+
+    // 4. Crear mensaje y nivel
+    const mensaje = `Se ha asignado el tipo "${tipo.nombre}" al dispositivo con consumo máximo estimado de ${tipo.consumo_maximo_w}W`;
+
+    let nivel = 'Bajo';
+    if (tipo.consumo_maximo_w >= 1500) {
+      nivel = 'Alto';
+    } else if (tipo.consumo_maximo_w >= 600) {
+      nivel = 'Medio';
+    }
+
+    // 5. Intentar actualizar alerta existente
+    const [updateAlertaResult] = await connection.query(
+      `UPDATE alertas
+       SET mensaje = ?, nivel = ?, id_tipo_dispositivo = ?
+       WHERE usuario_id = ? AND id_tipo_dispositivo = ?`,
+      [mensaje, nivel, tipoId, usuarioId, tipoId]
+    );
+
+    // 6. Si no existe alerta, insertar nueva
+    if (updateAlertaResult.affectedRows === 0) {
+      await connection.query(
+        `INSERT INTO alertas (usuario_id, mensaje, nivel, id_tipo_dispositivo)
+         VALUES (?, ?, ?, ?)`,
+        [usuarioId, mensaje, nivel, tipoId]
+      );
+    }
+
+    await connection.commit();
+    return updateResult.affectedRows;
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error al actualizar tipo y alerta:', error.message);
+    throw new Error('Error al actualizar tipo de dispositivo y alerta');
+  } finally {
+    connection.release();
+  }
 };
+
 
 export const deleteDeviceFromIdDB = async (deviceId, usuarioId) => {
   const connection = await db.getConnection();

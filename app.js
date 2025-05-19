@@ -20,6 +20,7 @@ import supplierRouter from './routes/supplierRouter.js'
 import passwordRecoveryRouter from './routes/passwordRecoveryRouter.js';
 import sensorRouter from './routes/sensorRouter.js';
 import electricalRouter  from './routes/ElectricalAnalysisRouter.js';
+import alertRouter from './routes/alertRouter.js';
 
 //import cookieParser from 'cookie-parser'
 
@@ -48,6 +49,7 @@ app.use('/supplier',supplierRouter);
 app.use('/psR',passwordRecoveryRouter);
 app.use('/sensor',sensorRouter);
 app.use('/electrical_analysis', electricalRouter);
+app.use('/alertas',alertRouter);
 
 
 // Ruta 404
