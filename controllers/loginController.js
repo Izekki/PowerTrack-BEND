@@ -30,6 +30,7 @@ export const loginUser = async (req, res) => {
     res.status(200).json({ 
       message: 'Inicio de sesión exitoso', 
       userId: user.id,
+      nombre: user.nombre,
       token: token // Enviamos el token al frontend
     });
     
