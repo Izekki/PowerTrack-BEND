@@ -1,4 +1,5 @@
 
+import AlertModel from './alertModel.js';
 import { db } from '../db/connection.js';
 
 class ElectricalAnalysisModel{
@@ -141,91 +142,189 @@ getConsumo = async (idDispositivo, parametros) => {
 
 getConsumoActual = async (idSensor) => {
   try {
-    const consultaUltimaMedicion = `
-      SELECT m.potencia AS valor, m.fecha_hora
-      FROM mediciones m
-      WHERE m.sensor_id = ?
-      ORDER BY m.fecha_hora DESC
-      LIMIT 1;
-    `;
-    const [filasMedicion] = await db.query(consultaUltimaMedicion, [idSensor]);
+    // ————————————————————
+    // 0. Obtener usuario y tipo de dispositivo desde 'dispositivos'
+    const [dispRows] = await db.query(
+      `SELECT usuario_id AS usuarioId, id_tipo_dispositivo AS idTipoDispositivo
+       FROM dispositivos
+       WHERE id_sensor = ?
+       LIMIT 1`,
+      [idSensor]
+    );
+    const dispositivo = dispRows[0] || {};
+    const usuarioId = dispositivo.usuarioId || null;
+    const idTipoDispositivo = dispositivo.idTipoDispositivo || null;
 
+    // ————————————————————
+    // 1. Última medición
+    const [filasMedicion] = await db.query(
+      `SELECT potencia AS valor, fecha_hora
+       FROM mediciones
+       WHERE sensor_id = ?
+       ORDER BY fecha_hora DESC
+       LIMIT 1`,
+      [idSensor]
+    );
     if (!filasMedicion.length) {
       return {
         mensaje: "No hay mediciones disponibles para este sensor",
         consumoActual: 0,
-        costoActualMXN: 0,
+        costoActualMXN: 0
       };
     }
+    const { valor, fecha_hora } = filasMedicion[0];
 
-    const ultima = filasMedicion[0];
-
-    const consultaProveedor = `SELECT * FROM proveedores WHERE nombre = 'CFE' LIMIT 1;`;
-    const [filasProveedor] = await db.query(consultaProveedor);
-
+    // ————————————————————
+    // 2. Datos de proveedor (CFE)
+    const [filasProveedor] = await db.query(
+      `SELECT nombre, cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo
+       FROM proveedores
+       WHERE nombre = 'CFE'
+       LIMIT 1`
+    );
     if (!filasProveedor.length) {
       throw new Error("No se encontró información del proveedor CFE.");
     }
-
     const proveedor = filasProveedor[0];
+    const cargo_variable    = parseFloat(proveedor.cargo_variable   || 0);
+    const cargo_capacidad   = parseFloat(proveedor.cargo_capacidad  || 0);
+    const cargo_distribucion= parseFloat(proveedor.cargo_distribucion|| 0);
+    const cargo_fijo        = parseFloat(proveedor.cargo_fijo       || 0);
 
-    // Parsear todos los cargos del proveedor a números
-    const cargo_variable = parseFloat(proveedor.cargo_variable || 0);
-    const cargo_capacidad = parseFloat(proveedor.cargo_capacidad || 0);
-    const cargo_distribucion = parseFloat(proveedor.cargo_distribucion || 0);
-    const cargo_fijo = parseFloat(proveedor.cargo_fijo || 0);
-
+    // ————————————————————
+    // 3. Cálculos de consumo y costos
     const minutosPorMedicion = 5;
     const horasPorMedicion = minutosPorMedicion / 60;
-    const medicionesPorDia = 24 * 60 / minutosPorMedicion;
+    const medicionesPorDia = (24 * 60) / minutosPorMedicion;
     const diasPorMes = 30;
     const medicionesPorMes = medicionesPorDia * diasPorMes;
     const factorCarga = 0.9;
 
-    const potenciaW = parseFloat(ultima.valor || 0);
+    const potenciaW = parseFloat(valor);
     const consumoMedicionKWh = (potenciaW / 1000) * horasPorMedicion;
     const consumoMensualKWh = consumoMedicionKWh * medicionesPorMes;
     const demandaKW = consumoMensualKWh / (24 * diasPorMes * factorCarga);
 
-    // Cálculos de costos
     const costoConsumo = consumoMensualKWh * cargo_variable;
     const costoCapacidad = demandaKW * cargo_capacidad;
     const costoDistribucion = demandaKW * cargo_distribucion;
     const costoFijo = cargo_fijo;
     const costoMensualTotal = costoConsumo + costoCapacidad + costoDistribucion + costoFijo;
-    
-    // Nuevos cálculos
+
     const costoPorMedicion = costoMensualTotal / medicionesPorMes;
     const estimacionCostoDiario = costoPorMedicion * medicionesPorDia;
 
+    // ————————————————————
+    // 4. Cargar tipos de alerta
+    const [tipos] = await db.query(
+      `SELECT clave, id
+       FROM tipos_alerta
+       WHERE clave IN ('transicion_intermedia','riesgo_dac','dispositivo_alto_consumo','bajo_consumo')`
+    );
+    const mapaTipo = tipos.reduce((acc, { clave, id }) => {
+      acc[clave] = id;
+      return acc;
+    }, {});
+
+    // ————————————————————
+    // Helper: evitar duplicados diarios
+    const existeHoy = async (tipoAlertaId) => {
+      if (!tipoAlertaId) return true;
+      const [r] = await db.query(
+        `SELECT 1
+         FROM alertas
+         WHERE sensor_id = ?
+           AND tipo_alerta_id = ?
+           AND DATE(fecha) = CURDATE()
+         LIMIT 1`,
+        [idSensor, tipoAlertaId]
+      );
+      return r.length > 0;
+    };
+
+    // ————————————————————
+    // 5. Condiciones y creación de alertas
+
+    // 5.1 Transición a consumo intermedio (151–280 kWh)
+    if (consumoMensualKWh >= 151 && consumoMensualKWh <= 280) {
+      const tipoId = mapaTipo.transicion_intermedia;
+      if (!(await existeHoy(tipoId))) {
+        await AlertModel.crear({
+          usuarioId,
+          mensaje: `Consumo estimado ${consumoMensualKWh.toFixed(2)} kWh: estás en rango intermedio (151–280).`,
+          nivel: 'Medio',
+          idTipoDispositivo,
+          sensorId: idSensor,
+          tipoAlertaId: tipoId
+        });
+      }
+    }
+
+    // 5.2 Riesgo de Tarifa DAC (> 250 kWh)
+    if (consumoMensualKWh > 250) {
+      const tipoId = mapaTipo.riesgo_dac;
+      if (!(await existeHoy(tipoId))) {
+        await AlertModel.crear({
+          usuarioId,
+          mensaje: `Consumo estimado ${consumoMensualKWh.toFixed(2)} kWh: riesgo de reclasificación a DAC.`,
+          nivel: 'Alto',
+          idTipoDispositivo,
+          sensorId: idSensor,
+          tipoAlertaId: tipoId
+        });
+      }
+    }
+
+    // 5.3 Dispositivo de alto consumo (> 0.83 kWh por medición)
+    if (consumoMedicionKWh > 0.83) {
+      const tipoId = mapaTipo.dispositivo_alto_consumo;
+      if (!(await existeHoy(tipoId))) {
+        await AlertModel.crear({
+          usuarioId,
+          mensaje: `Este sensor consumió ${consumoMedicionKWh.toFixed(2)} kWh en la última medición, sobre el promedio.`,
+          nivel: 'Medio',
+          idTipoDispositivo,
+          sensorId: idSensor,
+          tipoAlertaId: tipoId
+        });
+      }
+    }
+
+    // 5.4 Bajo consumo detectado (< 0.05 kWh por medición)
+    if (consumoMedicionKWh < 0.05) {
+      const tipoId = mapaTipo.bajo_consumo;
+      if (!(await existeHoy(tipoId))) {
+        await AlertModel.crear({
+          usuarioId,
+          mensaje: `Este sensor consumió solo ${consumoMedicionKWh.toFixed(2)} kWh: posible inactividad.`,
+          nivel: 'Bajo',
+          idTipoDispositivo,
+          sensorId: idSensor,
+          tipoAlertaId: tipoId
+        });
+      }
+    }
+
+    // ————————————————————
+    // 6. Retornar al cliente
     return {
       sensor_id: idSensor,
-      fechaMedicion: ultima.fecha_hora,
-      potenciaW: potenciaW,
+      fechaMedicion: fecha_hora,
+      potenciaW,
       consumoActualKWh: consumoMedicionKWh,
-      costoPorMedicion: costoPorMedicion,
-      estimacionCostoDiario: estimacionCostoDiario,
+      costoPorMedicion,
+      estimacionCostoDiario,
       estimacionConsumoMensualKWh: consumoMensualKWh,
       estimacionDemandaKW: demandaKW,
       estimacionCostoMensual: costoMensualTotal,
-      unidad: "kWh",
+      unidad: 'kWh',
       proveedor: proveedor.nombre,
-      detalleTarifas: {
-        cargo_variable: cargo_variable,
-        cargo_capacidad: cargo_capacidad,
-        cargo_distribucion: cargo_distribucion,
-        cargo_fijo: cargo_fijo
-      },
-      detalleCostos: {
-        consumo: costoConsumo,
-        capacidad: costoCapacidad,
-        distribucion: costoDistribucion,
-        fijo: costoFijo,
-      },
-      mensaje: "Estimación de consumo y costos según tarifas de CFE",
+      detalleTarifas: { cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo },
+      detalleCostos: { consumo: costoConsumo, capacidad: costoCapacidad, distribucion: costoDistribucion, fijo: costoFijo },
+      mensaje: 'Estimación de consumo y costos según tarifas de CFE'
     };
   } catch (error) {
-    console.error("Error al obtener el consumo actual:", error);
+    console.error('Error en getConsumoActual:', error);
     throw error;
   }
 };
