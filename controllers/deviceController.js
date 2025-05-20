@@ -44,7 +44,7 @@ export const addDevice = async (req, res) => {
 
   try {
     // Verificar si el usuario ya tiene un sensor con esa MAC
-    const existingSensor = await findSensorByMac(mac, usuario_id);
+    const existingSensor = await findSensorByMac(mac);
     
     if (existingSensor) {
       return res.status(400).json({ 
