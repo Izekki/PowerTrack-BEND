@@ -1,7 +1,8 @@
 import { getDeviceByIdFromDB, updateDevice, 
   createDevice, getAllDevices,getUnassignedDevicesFromDB, 
   getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
-import { findSensorByMac,createSensor,updateSensor,findSensorByMacAndUser } from '../models/sensorModel.js';
+import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
+import { createConfiguracion } from './savingsSettinsController.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -67,15 +68,25 @@ export const addDevice = async (req, res) => {
       dispositivo_id: newDeviceId
     });
 
+    // Crear configuración inicial en configuracion_ahorro (valores por defecto)
+    await createConfiguracion({
+      usuario_id,
+      dispositivo_id: newDeviceId,
+      minimo: 0.05,  
+      maximo: 0.83,
+      clave_alerta: 'consumo',
+      mensaje: null
+    });
+
     res.status(201).json({ 
-      message: 'Dispositivo y sensor creados exitosamente', 
+      message: 'Dispositivo, sensor y configuración creados exitosamente', 
       dispositivo_id: newDeviceId,
       sensor_id: newSensorId
     });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error al crear el dispositivo y el sensor', error });
+    res.status(500).json({ message: 'Error al crear el dispositivo, sensor o configuración', error });
   }
 };
 
