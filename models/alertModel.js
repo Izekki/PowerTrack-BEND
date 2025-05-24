@@ -89,6 +89,100 @@ class AlertModel {
     }
   }
 
+
+  
+static async verificarAlertasPorConsumo(sensorId, consumoMedicionKWh) {
+  try {
+    // 1. Obtener información del dispositivo
+    const [dispRows] = await db.execute(
+      `SELECT d.id AS dispositivoId, d.usuario_id AS usuarioId, 
+              d.id_tipo_dispositivo AS idTipoDispositivo
+       FROM dispositivos d
+       WHERE d.id_sensor = ?
+       LIMIT 1`,
+      [sensorId]
+    );
+    
+    if (!dispRows.length) return;
+    
+    const dispositivo = dispRows[0];
+    const { usuarioId, idTipoDispositivo, dispositivoId } = dispositivo;
+
+    // 2. Obtener configuración de ahorro (con valores por defecto)
+    const [configRows] = await db.execute(
+      `SELECT 
+          COALESCE(minimo, 0.05) AS minimo, 
+          COALESCE(maximo, 0.83) AS maximo, 
+          COALESCE(clave_alerta, 'Consumo') AS clave_alerta, 
+          mensaje
+       FROM configuracion_ahorro
+       WHERE (usuario_id = ? OR usuario_id IS NULL)
+         AND (dispositivo_id = ? OR dispositivo_id IS NULL)
+       ORDER BY usuario_id DESC, dispositivo_id DESC
+       LIMIT 1`,
+      [usuarioId, dispositivoId]
+    );
+
+    const config = configRows[0] || { minimo: 0.05, maximo: 0.83 };
+
+    // 3. Verificar si ya existe alerta hoy
+    const existeHoy = async (tipoAlertaClave) => {
+      const [r] = await db.execute(
+        `SELECT 1 FROM alertas a
+         JOIN tipos_alerta ta ON a.tipo_alerta_id = ta.id
+         WHERE a.sensor_id = ? 
+           AND ta.clave = ?
+           AND DATE(a.fecha) = CURDATE()
+         LIMIT 1`,
+        [sensorId, tipoAlertaClave]
+      );
+      return r.length > 0;
+    };
+
+    // 4. Verificar y crear alertas
+    const tipoAlertaClave = config.clave_alerta || 'Consumo';
+    
+    // Alerta por consumo excesivo
+    if (consumoMedicionKWh > config.maximo) {
+      if (!(await existeHoy(tipoAlertaClave))) {
+        await this.crear({
+          usuarioId,
+          mensaje: config.mensaje || `Consumo excesivo: ${consumoMedicionKWh.toFixed(2)} kWh (supera el máximo de ${config.maximo} kWh)`,
+          nivel: 'Alto',
+          idTipoDispositivo,
+          sensorId,
+          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave)
+        });
+      }
+    }
+    // Alerta por consumo bajo (opcional)
+    else if (consumoMedicionKWh < config.minimo) {
+      if (!(await existeHoy(tipoAlertaClave))) {
+        await this.crear({
+          usuarioId,
+          mensaje: config.mensaje || `Consumo muy bajo: ${consumoMedicionKWh.toFixed(2)} kWh (por debajo del mínimo de ${config.minimo} kWh)`,
+          nivel: 'Bajo',
+          idTipoDispositivo,
+          sensorId,
+          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave)
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error en verificarAlertasPorConsumo:', error);
+    // No relanzamos el error para no afectar el flujo principal
+  }
+}
+
+// Helper para obtener ID de tipo de alerta
+static async obtenerIdTipoAlerta(clave) {
+  const [tipos] = await db.execute(
+    `SELECT id FROM tipos_alerta WHERE clave = ? LIMIT 1`,
+    [clave]
+  );
+  return tipos[0]?.id || null;
+}
+
   /**
    * Crea una alerta manual o automática.
    *

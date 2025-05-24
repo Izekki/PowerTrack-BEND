@@ -1,6 +1,6 @@
-// controllers/measurementController.js
 import { findSensorByMac } from "../models/sensorModel.js";
 import { saveMeasurement } from "../models/measurementModel.js";
+import AlertModel from "../models/alertModel.js";
 
 export const createMeasurement = async (req, res) => {
   console.log(req.body);
@@ -30,16 +30,13 @@ export const createMeasurement = async (req, res) => {
     }
 
     const sensor = await findSensorByMac(mac_address);
-
     if (!sensor) {
       return res.status(404).json({ message: "Sensor no encontrado" });
     }
 
-    const sensorId = sensor.id;
-
-    // Guardar la medición con la fecha proporcionada por el sensor
+    // Guardar la medición
     await saveMeasurement(
-      sensorId,
+      sensor.id,
       voltaje,
       corriente,
       potencia,
@@ -48,6 +45,13 @@ export const createMeasurement = async (req, res) => {
       frecuencia,
       new Date(timestamp)
     );
+
+    // Calcular consumo en kWh (5 minutos por medición)
+    const consumoMedicionKWh = (potencia / 1000) * (5/60);
+
+    // Verificar alertas (no bloqueante)
+    AlertModel.verificarAlertasPorConsumo(sensor.id, consumoMedicionKWh)
+      .catch(e => console.error('Error en verificación de alertas:', e));
 
     res.status(201).json({ message: "Medición guardada correctamente" });
   } catch (error) {

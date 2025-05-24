@@ -112,7 +112,6 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
       "SELECT usuario_id FROM dispositivos WHERE id = ?",
       [idDispositivo]
     );
-
     const usuarioId = dispositivo.usuario_id;
 
     // 3. Obtener detalles del nuevo tipo
@@ -121,7 +120,17 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
       [tipoId]
     );
 
-    // 4. Crear mensaje y nivel
+    // 4. Obtener el id de tipo_alerta con clave 'Sistema'
+    const [[tipoAlertaSistema]] = await connection.query(
+      "SELECT id FROM tipos_alerta WHERE clave = 'Sistema'"
+    );
+
+    if (!tipoAlertaSistema) {
+      throw new Error('No se encontró el tipo de alerta Sistema');
+    }
+    const tipoAlertaId = tipoAlertaSistema.id;
+
+    // 5. Crear mensaje y nivel
     const mensaje = `Se ha asignado el tipo "${tipo.nombre}" al dispositivo con consumo máximo estimado de ${tipo.consumo_maximo_w}W`;
 
     let nivel = 'Bajo';
@@ -131,20 +140,20 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
       nivel = 'Medio';
     }
 
-    // 5. Intentar actualizar alerta existente
+    // 6. Intentar actualizar alerta existente (clave 'Sistema') para el dispositivo específico
     const [updateAlertaResult] = await connection.query(
       `UPDATE alertas
-       SET mensaje = ?, nivel = ?, id_tipo_dispositivo = ?
-       WHERE usuario_id = ? AND id_tipo_dispositivo = ?`,
-      [mensaje, nivel, tipoId, usuarioId, tipoId]
+       SET mensaje = ?, nivel = ?, id_tipo_dispositivo = ?, tipo_alerta_id = ?
+       WHERE usuario_id = ? AND dispositivo_id = ? AND tipo_alerta_id = ?`,
+      [mensaje, nivel, tipoId, tipoAlertaId, usuarioId, idDispositivo, tipoAlertaId]
     );
 
-    // 6. Si no existe alerta, insertar nueva
+    // 7. Si no existe alerta, insertar nueva con dispositivo_id
     if (updateAlertaResult.affectedRows === 0) {
       await connection.query(
-        `INSERT INTO alertas (usuario_id, mensaje, nivel, id_tipo_dispositivo)
-         VALUES (?, ?, ?, ?)`,
-        [usuarioId, mensaje, nivel, tipoId]
+        `INSERT INTO alertas (usuario_id, dispositivo_id, mensaje, nivel, id_tipo_dispositivo, tipo_alerta_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [usuarioId, idDispositivo, mensaje, nivel, tipoId, tipoAlertaId]
       );
     }
 
@@ -158,6 +167,8 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
     connection.release();
   }
 };
+
+
 
 
 export const deleteDeviceFromIdDB = async (deviceId, usuarioId) => {
