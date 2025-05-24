@@ -15,6 +15,8 @@ router.get('/dispositivo/:id/consumo-actual',eac.getConsumoActual);
 router.get('/dispositivosPorUsuarios/:idUsuario/consumo-actual',eac.getDispositivosPorUsuarioConsumo);
 router.get('/dispositivo/:id/consumo-detallado',eac.getConsumoDetalladoPorDispositivo);
 router.get('/consumoPorDispositivosGrupos/:id',eac.getConsumoPorDispositivosYGrupos);
+router.get("/historial/:idUsuario", eac.getHistorialConsumo);
+
 
 router.use((req, res) => {
     res.status(404).send({ error: 'Ruta de analisis electrico no encontrada: ' + req.url })
