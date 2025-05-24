@@ -453,7 +453,57 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
   }
 };
 
+ async getHistorialConsumo(idUsuario) {
+  const [dispositivos] = await db.query(`
+    SELECT d.id AS dispositivo_id
+    FROM dispositivos d
+    WHERE d.usuario_id = ?
+  `, [idUsuario]);
 
+  if (!dispositivos.length) return [];
+
+  const idDispositivos = dispositivos.map(d => d.dispositivo_id);
+  const placeholders = idDispositivos.map(() => '?').join(',');
+
+  const rangos = {
+    dia: "DATE(m.fecha_hora)",
+    semana: "YEARWEEK(m.fecha_hora, 1)",
+    mes: "DATE_FORMAT(m.fecha_hora, '%Y-%m')",
+    bimestre: "CONCAT(YEAR(m.fecha_hora), '-', LPAD(FLOOR((MONTH(m.fecha_hora) - 1) / 2) * 2 + 1, 2, '0'))"
+  };
+
+  const resultados = [];
+
+  for (const [clave, agrupacion] of Object.entries(rangos)) {
+    const [agrupados] = await db.query(`
+      SELECT 
+        ${agrupacion} AS etiqueta,
+        MIN((m.potencia / 1000) * 5 / 60) AS pmin,
+        MAX((m.potencia / 1000) * 5 / 60) AS pmax,
+        AVG((m.potencia / 1000) * 5 / 60) AS promedio
+      FROM mediciones m
+      INNER JOIN sensores s ON m.sensor_id = s.id
+      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+      WHERE d.id IN (${placeholders})
+      GROUP BY etiqueta
+      ORDER BY etiqueta DESC
+      LIMIT 10;
+    `, idDispositivos);
+
+    const resumenes = agrupados.map(item => ({
+      rango: clave,
+      etiqueta: item.etiqueta,
+      pmin: item.pmin != null ? parseFloat(Number(item.pmin).toFixed(3)) : 0,
+      pmax: item.pmax != null ? parseFloat(Number(item.pmax).toFixed(3)) : 0,
+      promedio: item.promedio != null ? parseFloat(Number(item.promedio).toFixed(3)) : 0
+    }));
+
+
+    resultados.push(...resumenes); // agregamos todos los registros del rango actual
+  }
+
+  return resultados;
+}
 
 
 }

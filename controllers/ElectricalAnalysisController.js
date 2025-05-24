@@ -449,6 +449,23 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
     if (objetoFecha.getTime() > fechaActual.getTime())
       return "La fecha no puede ser mayor a la fecha actual";
   }
+
+  getHistorialConsumo = async (req, res) => {
+    const { idUsuario } = req.params;
+
+    if (!idUsuario) {
+      return res.status(400).json({ message: "Falta parámetro: idUsuario" });
+    }
+
+    try {
+      const datos = await this.electricalAnalysisModel.getHistorialConsumo(idUsuario);
+      return res.status(200).json(datos);
+    } catch (error) {
+      console.error("Error en getHistorialConsumo:", error);
+      return res.status(500).json({ message: "Error al obtener historial de consumo", error: error.message });
+    }
+  };
+
 }
 export default ElectricalAnalysisController;
 
