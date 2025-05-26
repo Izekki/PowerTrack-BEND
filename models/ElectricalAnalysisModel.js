@@ -444,8 +444,7 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
   }
 };
 
-
- async getHistorialConsumo(idUsuario) {
+async getHistorialResumenPorRango(idUsuario) {
   const [dispositivos] = await db.query(`
     SELECT d.id AS dispositivo_id
     FROM dispositivos d
@@ -457,45 +456,201 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
   const idDispositivos = dispositivos.map(d => d.dispositivo_id);
   const placeholders = idDispositivos.map(() => '?').join(',');
 
-  const rangos = {
-    dia: "DATE(m.fecha_hora)",
-    semana: "YEARWEEK(m.fecha_hora, 1)",
-    mes: "DATE_FORMAT(m.fecha_hora, '%Y-%m')",
-    bimestre: "CONCAT(YEAR(m.fecha_hora), '-', LPAD(FLOOR((MONTH(m.fecha_hora) - 1) / 2) * 2 + 1, 2, '0'))"
+  // Rango dinámico en días
+  const rangosDias = {
+    dia: 1,
+    semana: 7,
+    mes: 30,
+    bimestre: 60
   };
 
+  const now = new Date();
   const resultados = [];
 
-  for (const [clave, agrupacion] of Object.entries(rangos)) {
-    const [agrupados] = await db.query(`
+  for (const [rango, dias] of Object.entries(rangosDias)) {
+    let fechaInicioStr;
+  const fechaFinal = now.toISOString().slice(0, 19).replace("T", " ");
+
+  if (rango === "dia") {
+    // Hoy a las 00:00:00
+    const hoyInicio = new Date(now);
+    hoyInicio.setHours(0, 0, 0, 0);
+    fechaInicioStr = hoyInicio.toISOString().slice(0, 19).replace("T", " ");
+  } else {
+    // Días hacia atrás desde ahora
+    const fechaInicio = new Date(now);
+    fechaInicio.setDate(now.getDate() - dias);
+    fechaInicioStr = fechaInicio.toISOString().slice(0, 19).replace("T", " ");
+  }
+
+    const [resumen] = await db.query(`
+    SELECT 
+      MIN((m.potencia / 1000) * 5 / 60) AS pmin,
+      MAX((m.potencia / 1000) * 5 / 60) AS pmax,
+      AVG((m.potencia / 1000) * 5 / 60) AS promedio
+    FROM mediciones m
+    INNER JOIN sensores s ON m.sensor_id = s.id
+    INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+    WHERE d.id IN (${placeholders})
+      AND m.fecha_hora BETWEEN ? AND ?
+  `, [...idDispositivos, fechaInicioStr, fechaFinal]);
+
+  const resultado = resumen[0] || {};
+
+const parseOrZero = (val) =>
+  val !== null && val !== undefined && !isNaN(Number(val))
+    ? parseFloat(Number(val).toFixed(3))
+    : 0;
+
+const pmin = parseOrZero(resultado.pmin);
+const pmax = parseOrZero(resultado.pmax);
+const promedio = parseOrZero(resultado.promedio);
+
+  resultados.push({
+    rango,
+    etiqueta: `Últimos ${dias} días`,
+    pmin,
+    pmax,
+    promedio
+  });
+  }
+
+  return resultados;
+}
+
+async getHistorialDetalladoPorRango(idUsuario) {
+  const [dispositivos] = await db.query(`
+    SELECT d.id AS dispositivo_id
+    FROM dispositivos d
+    WHERE d.usuario_id = ?
+  `, [idUsuario]);
+
+  if (!dispositivos.length) return [];
+
+  const idDispositivos = dispositivos.map(d => d.dispositivo_id);
+  const placeholders = idDispositivos.map(() => '?').join(',');
+
+  const now = new Date();
+  const rangos = [];
+
+  // 🕐 Rango día: cada hora de hoy
+  {
+    const inicio = new Date(now);
+    inicio.setHours(0, 0, 0, 0);
+    const fechaInicio = inicio.toISOString().slice(0, 19).replace("T", " ");
+    const fechaFinal = now.toISOString().slice(0, 19).replace("T", " ");
+
+    const [rows] = await db.query(`
       SELECT 
-        ${agrupacion} AS etiqueta,
-        MIN((m.potencia / 1000) * 5 / 60) AS pmin,
-        MAX((m.potencia / 1000) * 5 / 60) AS pmax,
+        HOUR(m.fecha_hora) AS etiqueta,
         AVG((m.potencia / 1000) * 5 / 60) AS promedio
       FROM mediciones m
       INNER JOIN sensores s ON m.sensor_id = s.id
       INNER JOIN dispositivos d ON s.dispositivo_id = d.id
       WHERE d.id IN (${placeholders})
+        AND m.fecha_hora BETWEEN ? AND ?
       GROUP BY etiqueta
-      ORDER BY etiqueta DESC
-      LIMIT 10;
-    `, idDispositivos);
+      ORDER BY etiqueta
+    `, [...idDispositivos, fechaInicio, fechaFinal]);
 
-    const resumenes = agrupados.map(item => ({
-      rango: clave,
-      etiqueta: item.etiqueta,
-      pmin: item.pmin != null ? parseFloat(Number(item.pmin).toFixed(3)) : 0,
-      pmax: item.pmax != null ? parseFloat(Number(item.pmax).toFixed(3)) : 0,
-      promedio: item.promedio != null ? parseFloat(Number(item.promedio).toFixed(3)) : 0
-    }));
-
-
-    resultados.push(...resumenes); // agregamos todos los registros del rango actual
+    rangos.push({
+      rango: 'dia',
+      detalles: rows.map(r => ({
+        etiqueta: `${r.etiqueta.toString().padStart(2, '0')}:00`,
+        promedio: parseFloat(Number(r.promedio).toFixed(3))
+      }))
+    });
   }
 
-  return resultados;
+  {
+    const inicio = new Date(now);
+    inicio.setDate(now.getDate() - 6);
+    const fechaInicio = inicio.toISOString().slice(0, 19).replace("T", " ");
+    const fechaFinal = now.toISOString().slice(0, 19).replace("T", " ");
+
+    const [rows] = await db.query(`
+      SELECT 
+        DATE(m.fecha_hora) AS etiqueta,
+        AVG((m.potencia / 1000) * 5 / 60) AS promedio
+      FROM mediciones m
+      INNER JOIN sensores s ON m.sensor_id = s.id
+      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+      WHERE d.id IN (${placeholders})
+        AND m.fecha_hora BETWEEN ? AND ?
+      GROUP BY etiqueta
+      ORDER BY etiqueta
+    `, [...idDispositivos, fechaInicio, fechaFinal]);
+
+    rangos.push({
+      rango: 'semana',
+      detalles: rows.map(r => ({
+        etiqueta: r.etiqueta,
+        promedio: parseFloat(Number(r.promedio).toFixed(3))
+      }))
+    });
+  }
+
+  {
+    const inicio = new Date(now);
+    inicio.setDate(now.getDate() - 28);
+    const fechaInicio = inicio.toISOString().slice(0, 19).replace("T", " ");
+    const fechaFinal = now.toISOString().slice(0, 19).replace("T", " ");
+
+    const [rows] = await db.query(`
+      SELECT 
+        YEARWEEK(m.fecha_hora, 1) AS etiqueta,
+        AVG((m.potencia / 1000) * 5 / 60) AS promedio
+      FROM mediciones m
+      INNER JOIN sensores s ON m.sensor_id = s.id
+      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+      WHERE d.id IN (${placeholders})
+        AND m.fecha_hora BETWEEN ? AND ?
+      GROUP BY etiqueta
+      ORDER BY etiqueta
+    `, [...idDispositivos, fechaInicio, fechaFinal]);
+
+    rangos.push({
+      rango: 'mes',
+      detalles: rows.map(r => ({
+        etiqueta: `Semana ${r.etiqueta}`,
+        promedio: parseFloat(Number(r.promedio).toFixed(3))
+      }))
+    });
+  }
+
+  {
+    const inicio = new Date(now);
+    inicio.setMonth(now.getMonth() - 1);
+    inicio.setDate(1);
+    const fechaInicio = inicio.toISOString().slice(0, 19).replace("T", " ");
+    const fechaFinal = now.toISOString().slice(0, 19).replace("T", " ");
+
+    const [rows] = await db.query(`
+      SELECT 
+        DATE_FORMAT(m.fecha_hora, '%Y-%m') AS etiqueta,
+        AVG((m.potencia / 1000) * 5 / 60) AS promedio
+      FROM mediciones m
+      INNER JOIN sensores s ON m.sensor_id = s.id
+      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+      WHERE d.id IN (${placeholders})
+        AND m.fecha_hora BETWEEN ? AND ?
+      GROUP BY etiqueta
+      ORDER BY etiqueta
+    `, [...idDispositivos, fechaInicio, fechaFinal]);
+
+    rangos.push({
+      rango: 'bimestre',
+      detalles: rows.map(r => ({
+        etiqueta: r.etiqueta,
+        promedio: parseFloat(Number(r.promedio).toFixed(3))
+      }))
+    });
+  }
+
+  return rangos;
 }
+
+
 
 
 }
