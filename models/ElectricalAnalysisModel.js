@@ -193,7 +193,7 @@ getConsumoActual = async (idSensor) => {
     const cargo_fijo = parseFloat(proveedor.cargo_fijo || 0);
 
     // ————————————————————
-    // 3. Cálculos de consumo y costos
+    // 3. Cálculos base de consumo y costos
     const minutosPorMedicion = 5;
     const horasPorMedicion = minutosPorMedicion / 60;
     const medicionesPorDia = (24 * 60) / minutosPorMedicion;
@@ -214,9 +214,19 @@ getConsumoActual = async (idSensor) => {
 
     const costoPorMedicion = costoMensualTotal / medicionesPorMes;
     const estimacionCostoDiario = costoPorMedicion * medicionesPorDia;
+    const estimacionConsumoDiario = consumoMedicionKWh * medicionesPorDia;
 
     // ————————————————————
-    // 4. Cargar tipos de alerta
+    // 4. Nuevos cálculos unitarios
+    const costoPorKWh = cargo_variable;                     // $ por kWh
+    const costoPorKW = cargo_capacidad;                    // $ por KW
+    const costoPorKWDistribucion = cargo_distribucion;     // $ por KW de distribución
+    const costoFijoMensual = cargo_fijo;                  // cargo fijo mensual
+    const costoUnitarioPorMedicion = costoPorKWh * consumoMedicionKWh;
+    const consumoPorMedicion = consumoMedicionKWh;
+
+    // ————————————————————
+    // 5. Cargar tipos de alerta
     const [tipos] = await db.query(
       `SELECT clave, id
        FROM tipos_alerta`
@@ -243,7 +253,7 @@ getConsumoActual = async (idSensor) => {
     };
 
     // ————————————————————
-    // 5. Cargar configuración de ahorro (con valores por defecto si no existe)
+    // 6. Cargar configuración de ahorro (con valores por defecto si no existe)
     const [configRows] = await db.query(
       `SELECT 
           COALESCE(minimo, 0.05) AS minimo, 
@@ -259,7 +269,7 @@ getConsumoActual = async (idSensor) => {
     );
 
     // ————————————————————
-    // 6. Sistema único de alertas basado en configuración
+    // 7. Sistema único de alertas basado en configuración
     if (configRows.length > 0) {
       const config = configRows[0];
       const minimo = parseFloat(config.minimo);
@@ -295,7 +305,7 @@ getConsumoActual = async (idSensor) => {
     }
 
     // ————————————————————
-    // 7. Retornar datos al cliente
+    // 8. Retornar datos al cliente (combinado viejo + nuevo)
     return {
       sensor_id: idSensor,
       fechaMedicion: fecha_hora,
@@ -308,8 +318,32 @@ getConsumoActual = async (idSensor) => {
       estimacionCostoMensual: costoMensualTotal,
       unidad: 'kWh',
       proveedor: proveedor.nombre,
-      detalleTarifas: { cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo },
-      detalleCostos: { consumo: costoConsumo, capacidad: costoCapacidad, distribucion: costoDistribucion, fijo: costoFijo },
+      detalleTarifas: {
+        cargo_variable,
+        cargo_capacidad,
+        cargo_distribucion,
+        cargo_fijo
+      },
+      detalleCostos: {
+        consumo: costoConsumo,
+        capacidad: costoCapacidad,
+        distribucion: costoDistribucion,
+        fijo: costoFijo
+      },
+      detalleCostosUnitarios: {
+        costoPorKWh,
+        costoPorKW,
+        costoPorKWDistribucion,
+        costoFijoMensual
+      },
+      detallePorMedicion: {
+        costoUnitarioPorMedicion,
+        consumoPorMedicion
+      },
+      detalleEstimacionDiaria: {
+        estimacionCostoDiario,
+        estimacionConsumoDiario
+      },
       mensaje: 'Estimación de consumo y costos según tarifas de CFE'
     };
   } catch (error) {
