@@ -46,7 +46,8 @@ export const getAllDevices = async () => {
 
 export const getAllDeviceForUserFromDB = async (id) => {
   try {
-    const query = `SELECT 
+    const query = `
+      SELECT 
         dispositivos.id, 
         dispositivos.nombre AS dispositivo_nombre, 
         dispositivos.ubicacion, 
@@ -54,17 +55,21 @@ export const getAllDeviceForUserFromDB = async (id) => {
         dispositivos.id_grupo,
         dispositivos.id_tipo_dispositivo,
         dispositivos.id_sensor,
-        grupos.nombre AS grupo_nombre
+        grupos.nombre AS grupo_nombre,
+        sensores.mac_address  -- agregamos la MAC
       FROM dispositivos
       LEFT JOIN grupos ON dispositivos.id_grupo = grupos.id
-      WHERE dispositivos.usuario_id = ?`;
-      const [rows] = await db.query(query, [id]);
-      return rows;
-  }catch(error){
+      LEFT JOIN sensores ON dispositivos.id = sensores.dispositivo_id
+      WHERE dispositivos.usuario_id = ?
+    `;
+    const [rows] = await db.query(query, [id]);
+    return rows;
+  } catch (error) {
     console.error('Error al obtener dispositivos para el usuario:', error.message);
     throw new Error('Error al obtener dispositivos para el usuario');
-    }
+  }
 };
+
 
 
 export const getUnassignedDevicesFromDB = async (usuarioId) => {
@@ -97,6 +102,15 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
   try {
     await connection.beginTransaction();
 
+    // 0. Obtener el tipo actual del dispositivo (antes de actualizar)
+    const [[dispositivoActual]] = await connection.query(
+      `SELECT td.nombre AS tipo_actual_nombre, td.consumo_maximo_w AS consumo_actual_w
+       FROM dispositivos d
+       JOIN tipos_dispositivos td ON d.id_tipo_dispositivo = td.id
+       WHERE d.id = ?`,
+      [idDispositivo]
+    );
+
     // 1. Actualizar el tipo del dispositivo
     const [updateResult] = await connection.query(
       "UPDATE dispositivos SET id_tipo_dispositivo = ? WHERE id = ?",
@@ -115,7 +129,7 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
     const usuarioId = dispositivo.usuario_id;
 
     // 3. Obtener detalles del nuevo tipo
-    const [[tipo]] = await connection.query(
+    const [[tipoNuevo]] = await connection.query(
       "SELECT nombre, consumo_maximo_w FROM tipos_dispositivos WHERE id = ?",
       [tipoId]
     );
@@ -130,32 +144,28 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
     }
     const tipoAlertaId = tipoAlertaSistema.id;
 
-    // 5. Crear mensaje y nivel
-    const mensaje = `Se ha asignado el tipo "${tipo.nombre}" al dispositivo con consumo máximo estimado de ${tipo.consumo_maximo_w}W`;
+    // 5. Crear mensaje adaptado
+    let mensaje = '';
+    if (dispositivoActual && dispositivoActual.tipo_actual_nombre) {
+      mensaje = `Se ha cambiado el dispositivo de "${dispositivoActual.tipo_actual_nombre}" a "${tipoNuevo.nombre}" (consumo máximo estimado: ${tipoNuevo.consumo_maximo_w}W)`;
+    } else {
+      mensaje = `Se ha asignado el tipo "${tipoNuevo.nombre}" al dispositivo con consumo máximo estimado de ${tipoNuevo.consumo_maximo_w}W`;
+    }
 
+    // Nivel según consumo
     let nivel = 'Bajo';
-    if (tipo.consumo_maximo_w >= 1500) {
+    if (tipoNuevo.consumo_maximo_w >= 1500) {
       nivel = 'Alto';
-    } else if (tipo.consumo_maximo_w >= 600) {
+    } else if (tipoNuevo.consumo_maximo_w >= 600) {
       nivel = 'Medio';
     }
 
-    // 6. Intentar actualizar alerta existente (clave 'Sistema') para el dispositivo específico
-    const [updateAlertaResult] = await connection.query(
-      `UPDATE alertas
-       SET mensaje = ?, nivel = ?, id_tipo_dispositivo = ?, tipo_alerta_id = ?
-       WHERE usuario_id = ? AND dispositivo_id = ? AND tipo_alerta_id = ?`,
-      [mensaje, nivel, tipoId, tipoAlertaId, usuarioId, idDispositivo, tipoAlertaId]
+    // 🔥 Siempre insertar una nueva alerta (sin reemplazar las anteriores)
+    await connection.query(
+      `INSERT INTO alertas (usuario_id, dispositivo_id, mensaje, nivel, id_tipo_dispositivo, tipo_alerta_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [usuarioId, idDispositivo, mensaje, nivel, tipoId, tipoAlertaId]
     );
-
-    // 7. Si no existe alerta, insertar nueva con dispositivo_id
-    if (updateAlertaResult.affectedRows === 0) {
-      await connection.query(
-        `INSERT INTO alertas (usuario_id, dispositivo_id, mensaje, nivel, id_tipo_dispositivo, tipo_alerta_id)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [usuarioId, idDispositivo, mensaje, nivel, tipoId, tipoAlertaId]
-      );
-    }
 
     await connection.commit();
     return updateResult.affectedRows;
@@ -167,6 +177,7 @@ export const updateDeviceType = async (idDispositivo, tipoId) => {
     connection.release();
   }
 };
+
 
 
 
