@@ -3,10 +3,11 @@ import { getDeviceByIdFromDB, updateDevice,
   getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
 import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
 import { createConfiguracion } from './savingsSettinsController.js';
+import { getSensorByDeviceId,updateSensorMac } from '../models/sensorModel.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
-  const {name, ubicacion, id_grupo } = req.body;
+  const { name, ubicacion, id_grupo, mac_address } = req.body;
 
   try {
     const device = await getDeviceByIdFromDB(id);
@@ -14,18 +15,32 @@ export const editDevice = async (req, res) => {
 
     const id_usuario = device.usuario_id;
 
-    const updated = await updateDevice(id, name, ubicacion, id_usuario, id_grupo);
-    if (updated) {
-      const updateDevice = await getDeviceByIdFromDB(id);
-      res.json(updateDevice);
+    // Actualizamos datos del dispositivo
+    const updatedDevice = await updateDevice(id, name, ubicacion, id_usuario, id_grupo);
 
+    // Si se envió mac_address, actualizamos la MAC del sensor relacionado
+    if (mac_address) {
+      const sensor = await getSensorByDeviceId(id);
+      if (sensor) {
+        await updateSensorMac(sensor.id, mac_address);
+      } else {
+        // Si no hay sensor, opcional: crear uno o devolver error
+        return res.status(404).json({ message: 'Sensor relacionado no encontrado para este dispositivo' });
+      }
+    }
+
+    if (updatedDevice) {
+      const updated = await getDeviceByIdFromDB(id);
+      res.json(updated);
     } else {
       res.status(500).json({ message: 'No se pudo actualizar el dispositivo' });
     }
+
   } catch (error) {
     res.status(500).json({ message: 'Error interno del servidor', error });
   }
 };
+
 
 export const getDeviceById = async (req, res) => {
   const { id } = req.params;

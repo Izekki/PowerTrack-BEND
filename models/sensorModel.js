@@ -90,3 +90,16 @@ export const findAssignedSensorById = async (sensorId) => {
     await db.query(query, [...values, id]);
   };
   
+
+  export const getSensorByDeviceId = async (dispositivo_id) => {
+    const [rows] = await db.query('SELECT * FROM sensores WHERE dispositivo_id = ?', [dispositivo_id]);
+    return rows[0];
+  };
+
+  export const updateSensorMac = async (sensor_id, mac_address) => {
+    const [result] = await db.query(
+      'UPDATE sensores SET mac_address = ? WHERE id = ?',
+      [mac_address, sensor_id]
+    );
+     return result.affectedRows;
+  };
