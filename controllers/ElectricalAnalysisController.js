@@ -231,7 +231,21 @@ class ElectricalAnalysisController {
     }
   };
 
+  getConsumoPorRango= async (req, res) => {
+  try {
+    const { idSensor } = req.params;
+    const { fechaInicio, fechaFin } = req.query;
 
+    if (!idSensor) {
+      return res.status(400).json({ error: 'Falta el parámetro idSensor' });
+    }
+    const resultado = await this.electricalAnalysisModel.getConsumoPorRango(idSensor, fechaInicio, fechaFin);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error en consumoPorRangoController:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
 
 
 
@@ -363,6 +377,21 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
 
   try {
     const datos = await this.electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuario(id);
+    res.status(200).json(datos);
+  } catch (error) {
+    res.status(500).json({
+      mensaje: 'Error al obtener el consumo por dispositivos y grupos del usuario',
+      error: error.message,
+    });
+  }
+};
+
+
+  getConsumoPorDispositivosYGruposPorUsuarioConRango = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const datos = await this.electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuarioConRango(id);
     res.status(200).json(datos);
   } catch (error) {
     res.status(500).json({

@@ -432,6 +432,331 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
 };
 
 
+getConsumoPorRango = async (idSensor, fechaInicio, fechaFin) => {
+  try {
+
+    const safeNumber = (value, defaultValue = 0) => {
+      if (typeof value === "number" && !isNaN(value)) {
+        return value;
+      }
+      const parsed = parseFloat(value);
+      return typeof parsed === "number" && !isNaN(parsed) ? parsed : defaultValue;
+    };
+
+    // ————————————————————
+    // 0. Obtener usuario, dispositivo e id_tipo_dispositivo
+    const [dispRows] = await db.query(
+      `SELECT id AS dispositivoId, usuario_id AS usuarioId, id_tipo_dispositivo AS idTipoDispositivo
+       FROM dispositivos
+       WHERE id_sensor = ?
+       LIMIT 1`,
+      [idSensor]
+    );
+    const dispositivo = dispRows[0] || {};
+    const usuarioId = dispositivo.usuarioId || null;
+    const idTipoDispositivo = dispositivo.idTipoDispositivo || null;
+    const dispositivoId = dispositivo.dispositivoId || null;
+
+    // ————————————————————
+    // 1. Última medición
+    const [filasMedicion] = await db.query(
+      `SELECT potencia AS valor, fecha_hora
+       FROM mediciones
+       WHERE sensor_id = ?
+       ORDER BY fecha_hora DESC
+       LIMIT 1`,
+      [idSensor]
+    );
+    if (!filasMedicion.length) {
+      return {
+        mensaje: "No hay mediciones disponibles para este sensor",
+        consumoActual: 0,
+        costoActualMXN: 0,
+        estado: "Sin datos"
+      };
+    }
+    const { valor, fecha_hora } = filasMedicion[0];
+
+    // ————————————————————
+    // 2. Datos de proveedor (CFE)
+    const [filasProveedor] = await db.query(
+      `SELECT nombre, cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo
+       FROM proveedores
+       WHERE nombre = 'CFE'
+       LIMIT 1`
+    );
+    if (!filasProveedor.length) {
+      throw new Error("No se encontró información del proveedor CFE.");
+    }
+    const proveedor = filasProveedor[0];
+    const cargo_variable = parseFloat(proveedor.cargo_variable || 0);
+    const cargo_capacidad = parseFloat(proveedor.cargo_capacidad || 0);
+    const cargo_distribucion = parseFloat(proveedor.cargo_distribucion || 0);
+    const cargo_fijo = parseFloat(proveedor.cargo_fijo || 0);
+
+    // ————————————————————
+    // 3. Promedio histórico en rango o últimos 1 días
+    // Si no hay fechas o están mal, usa últimos 1 días por defecto
+    let queryFechaCondicion = '';
+    let params = [idSensor];
+    if (fechaInicio && fechaFin) {
+      queryFechaCondicion = 'AND fecha_hora BETWEEN ? AND ?';
+      params.push(fechaInicio, fechaFin);
+    } else {
+      queryFechaCondicion = 'AND fecha_hora >= NOW() - INTERVAL 1 DAY';
+    }
+
+    const [historico] = await db.query(
+      `SELECT AVG(potencia) AS promedio_potencia
+       FROM mediciones
+       WHERE sensor_id = ? ${queryFechaCondicion}`,
+      params
+    );
+    const promedioPotenciaW = parseFloat(historico[0]?.promedio_potencia) || parseFloat(valor);
+
+    // ————————————————————
+    // 4. Cálculos base de consumo y costos (igual que antes)
+    const minutosPorMedicion = 5;
+    const horasPorMedicion = minutosPorMedicion / 60;
+    const medicionesPorDia = (24 * 60) / minutosPorMedicion;
+    const diasPorMes = 30;
+    const medicionesPorMes = medicionesPorDia * diasPorMes;
+    const factorCarga = 0.9;
+
+    const consumoMedicionKWh = (promedioPotenciaW / 1000) * horasPorMedicion;
+    const consumoMensualKWh = consumoMedicionKWh * medicionesPorMes;
+    const demandaKW = consumoMensualKWh / (24 * diasPorMes * factorCarga);
+
+    const costoConsumo = consumoMensualKWh * cargo_variable;
+    const costoCapacidad = demandaKW * cargo_capacidad;
+    const costoDistribucion = demandaKW * cargo_distribucion;
+    const costoFijo = cargo_fijo;
+    const costoMensualTotal = costoConsumo + costoCapacidad + costoDistribucion + costoFijo;
+
+    const costoPorMedicion = costoMensualTotal / medicionesPorMes;
+    const estimacionCostoDiario = costoPorMedicion * medicionesPorDia;
+    const estimacionConsumoDiario = consumoMedicionKWh * medicionesPorDia;
+
+    // ————————————————————
+    // 5. Cálculos unitarios
+    const costoPorKWh = cargo_variable;                     // $ por kWh
+    const costoPorKW = cargo_capacidad;                    // $ por KW
+    const costoPorKWDistribucion = cargo_distribucion;     // $ por KW de distribución
+    const costoFijoMensual = cargo_fijo;                  // cargo fijo mensual
+    const costoUnitarioPorMedicion = costoPorKWh * consumoMedicionKWh;
+    const consumoPorMedicion = consumoMedicionKWh;
+
+    
+
+    // ————————————————————
+    // 6. Retornar datos al cliente
+      return {
+        sensor_id: idSensor,
+        fechaMedicion: fecha_hora,
+        potenciaW: safeNumber(parseFloat(valor)),
+        promedioPotenciaW: safeNumber(promedioPotenciaW),
+        consumoActualKWh: safeNumber(consumoMedicionKWh),
+        costoPorMedicion: safeNumber(costoPorMedicion),
+        estimacionCostoDiario: safeNumber(estimacionCostoDiario),
+        estimacionConsumoMensualKWh: safeNumber(consumoMensualKWh),
+        estimacionDemandaKW: safeNumber(demandaKW),
+        estimacionCostoMensual: safeNumber(costoMensualTotal),
+        unidad: 'kWh',
+        proveedor: proveedor.nombre,
+        detalleTarifas: {
+          cargo_variable: safeNumber(cargo_variable),
+          cargo_capacidad: safeNumber(cargo_capacidad),
+          cargo_distribucion: safeNumber(cargo_distribucion),
+          cargo_fijo: safeNumber(cargo_fijo)
+        },
+        detalleCostos: {
+          consumo: safeNumber(costoConsumo),
+          capacidad: safeNumber(costoCapacidad),
+          distribucion: safeNumber(costoDistribucion),
+          fijo: safeNumber(costoFijo)
+        },
+        detalleCostosUnitarios: {
+          costoPorKWh: safeNumber(costoPorKWh),
+          costoPorKW: safeNumber(costoPorKW),
+          costoPorKWDistribucion: safeNumber(costoPorKWDistribucion),
+          costoFijoMensual: safeNumber(costoFijoMensual)
+        },
+        detallePorMedicion: {
+          costoUnitarioPorMedicion: safeNumber(costoUnitarioPorMedicion),
+          consumoPorMedicion: safeNumber(consumoPorMedicion)
+        },
+        detalleEstimacionDiaria: {
+          estimacionCostoDiario: safeNumber(estimacionCostoDiario),
+          estimacionConsumoDiario: safeNumber(estimacionConsumoDiario)
+        },
+        mensaje: fechaInicio && fechaFin
+          ? `Estimación de consumo y costos para el rango ${fechaInicio} a ${fechaFin}.`
+          : 'Estimación de consumo y costos según tarifas de CFE usando datos históricos (últimos 7 días si existen)'
+      };
+
+  } catch (error) {
+    console.error('Error en getConsumoPorRango:', error);
+    throw error;
+  }
+};
+
+getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaInicio, fechaFin) => {
+  try {
+    console.log("Usuario recibido:", id_usuario);
+
+    // Obtener tarifas CFE
+    const [filasProveedor] = await db.query(
+      `SELECT nombre, cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo
+       FROM proveedores
+       WHERE nombre = 'CFE'
+       LIMIT 1`
+    );
+    if (!filasProveedor.length) throw new Error("No se encontró información del proveedor CFE.");
+    const proveedor = filasProveedor[0];
+    const cargo_variable = parseFloat(proveedor.cargo_variable || 0);
+    const cargo_capacidad = parseFloat(proveedor.cargo_capacidad || 0);
+    const cargo_distribucion = parseFloat(proveedor.cargo_distribucion || 0);
+    const cargo_fijo = parseFloat(proveedor.cargo_fijo || 0);
+
+    // Obtener dispositivos del usuario
+    const [dispositivos] = await db.query(
+      `SELECT id AS dispositivoId, nombre, id_grupo AS grupoId, id_sensor AS sensorId
+       FROM dispositivos
+       WHERE usuario_id = ?`,
+      [id_usuario]
+    );
+
+    console.log(`Dispositivos encontrados: ${dispositivos.length}`);
+    if (!dispositivos.length) return { mensaje: "No hay dispositivos para este usuario" };
+    
+    const [filasGrupos] = await db.query(
+      `SELECT id, nombre FROM grupos WHERE id IN (?)`,
+      [dispositivos.map(d => d.grupoId).filter(id => id !== null)]
+    );
+
+    const mapaNombreGrupo = filasGrupos.reduce((map, g) => {
+      map[g.id] = g.nombre;
+      return map;
+    }, {});
+
+    // Constantes
+    const minutosPorMedicion = 5;
+    const horasPorMedicion = minutosPorMedicion / 60;
+    const medicionesPorDia = (24 * 60) / minutosPorMedicion;
+    const diasPorMes = 30;
+    const medicionesPorMes = medicionesPorDia * diasPorMes;
+    const factorCarga = 0.9;
+
+    let resultados = [];
+    let grupos = {};
+
+    for (const dispositivo of dispositivos) {
+      console.log(`Procesando dispositivo ID: ${dispositivo.dispositivoId}, sensor ID: ${dispositivo.sensorId}`);
+
+      // 1. Obtener potencia promedio en rango si fechas dadas, sino última medición
+      let potenciaW = 0;
+      let fecha_hora = null;
+
+      if (fechaInicio && fechaFin) {
+        // Promedio potencia en rango
+        const [promedioRow] = await db.query(
+          `SELECT AVG(potencia) AS promedio_potencia
+           FROM mediciones
+           WHERE sensor_id = ? AND fecha_hora BETWEEN ? AND ?`,
+          [dispositivo.sensorId, fechaInicio, fechaFin]
+        );
+        potenciaW = parseFloat(promedioRow[0]?.promedio_potencia) || 0;
+        fecha_hora = `${fechaInicio} a ${fechaFin}`;
+      } else {
+        // Última medición
+        const [filasMedicion] = await db.query(
+          `SELECT potencia AS valor, fecha_hora
+           FROM mediciones
+           WHERE sensor_id = ?
+           ORDER BY fecha_hora DESC
+           LIMIT 1`,
+          [dispositivo.sensorId]
+        );
+        if (filasMedicion.length) {
+          potenciaW = parseFloat(filasMedicion[0].valor);
+          fecha_hora = filasMedicion[0].fecha_hora;
+        }
+      }
+
+      // Calcular consumos y costos
+      const consumoMedicionKWh = (potenciaW / 1000) * horasPorMedicion;
+      const consumoMensualKWh = consumoMedicionKWh * medicionesPorMes;
+      const demandaKW = consumoMensualKWh / (24 * diasPorMes * factorCarga);
+
+      const costoConsumo = consumoMensualKWh * cargo_variable;
+      const costoCapacidad = demandaKW * cargo_capacidad;
+      const costoDistribucion = demandaKW * cargo_distribucion;
+      const costoFijo = cargo_fijo;
+      const costoMensualTotal = costoConsumo + costoCapacidad + costoDistribucion + costoFijo;
+
+      const costoPorMedicion = costoMensualTotal / medicionesPorMes;
+      const estimacionCostoDiario = costoPorMedicion * medicionesPorDia;
+      const estimacionConsumoDiarioKWh = consumoMedicionKWh * medicionesPorDia;
+
+      const resultado = {
+        dispositivo_id: dispositivo.dispositivoId,
+        nombre: dispositivo.nombre,
+        grupo_id: dispositivo.grupoId,
+        sensor_id: dispositivo.sensorId,
+        fechaMedicion: fecha_hora,
+        potenciaW,
+        consumoActualKWh: consumoMedicionKWh,
+        consumoDiarioKWh: estimacionConsumoDiarioKWh,
+        consumoMensualKWh,
+        costoPorMedicionMXN: costoPorMedicion.toFixed(2),
+        costoDiarioMXN: estimacionCostoDiario.toFixed(2),
+        costoMensualMXN: costoMensualTotal.toFixed(2),
+        unidad: "kWh",
+        detalleTarifas: { cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo },
+        detalleCostos: { consumo: costoConsumo, capacidad: costoCapacidad, distribucion: costoDistribucion, fijo: costoFijo }
+      };
+
+      resultados.push(resultado);
+
+      // Agrupar por grupo, asignar clave fija para null
+      const grupoKey = dispositivo.grupoId ?? 'sin_grupo';
+
+      if (!grupos[grupoKey]) {
+        grupos[grupoKey] = {
+          grupo_id: dispositivo.grupoId,
+          nombre: mapaNombreGrupo[dispositivo.grupoId] || "Sin Grupo",
+          dispositivos: [],
+          consumoTotalKWh: 0,
+          costoTotalMXN: 0,
+          consumoDiarioTotalKWh: 0,
+          costoDiarioTotalMXN: 0,
+          consumoMensualTotalKWh: 0,
+          costoMensualTotalMXN: 0,
+        };
+      }
+
+      grupos[grupoKey].dispositivos.push(resultado);
+      grupos[grupoKey].consumoTotalKWh += consumoMedicionKWh;
+      grupos[grupoKey].costoTotalMXN += parseFloat(costoPorMedicion.toFixed(2));
+      grupos[grupoKey].consumoDiarioTotalKWh += estimacionConsumoDiarioKWh;
+      grupos[grupoKey].costoDiarioTotalMXN += parseFloat(estimacionCostoDiario.toFixed(2));
+      grupos[grupoKey].consumoMensualTotalKWh += consumoMensualKWh;
+      grupos[grupoKey].costoMensualTotalMXN += parseFloat(costoMensualTotal.toFixed(2));
+    }
+
+    return {
+      resumenDispositivos: resultados,
+      resumenGrupos: Object.values(grupos),
+    };
+  } catch (error) {
+    console.error("Error en getConsumoPorDispositivosYGruposPorUsuarioConRango:", error);
+    throw error;
+  }
+};
+
+
+
+
 async getHistorialResumenPorRango(idUsuario) {
   const [dispositivos] = await db.query(`
     SELECT d.id AS dispositivo_id
