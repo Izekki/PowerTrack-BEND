@@ -85,8 +85,8 @@ const generateUserReport = async (req, res) => {
         correo: user.correo,
         fechaInicio,
         fechaFinal,
-        fechaGeneracion: new Date().toISOString(),
-        diasEnPeriodo: diffDays
+        fechaGeneracion: new Date().toLocaleString(),
+        diasEnPeriodo: diffDays // Agregado para referencia
       },
       resumenGeneral: {
         consumoTotalPeriodoKWh: safeToFixed(consumoTotalPeriodo, 4),
@@ -95,7 +95,7 @@ const generateUserReport = async (req, res) => {
         costoDiarioTotalMXN: safeToFixed(costoDiarioTotal, 2),
         consumoMensualTotalKWh: safeToFixed(consumoMensualTotal, 4),
         costoMensualTotalMXN: safeToFixed(costoMensualTotal, 2),
-        consumoPorDiaKWh: safeToFixed(consumoPorDia, 4),
+        consumoPorDiaKWh: safeToFixed(consumoPorDia, 4), // Nuevo campo agregado
         costoPorDiaMXN: safeToFixed(costoTotalPeriodo / diffDays, 2) // Campo adicional útil
       },
       grupos
