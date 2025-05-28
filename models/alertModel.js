@@ -92,9 +92,7 @@ class AlertModel {
 
   
 static async verificarAlertasPorConsumo(sensorId, potencia) {
- console.log("🔧 [DEBUG] Entrando a verificarAlertasPorConsumo");
-  console.log("sensorId:", sensorId);
-  console.log("potencia:", potencia);  try {
+  try {
     // 1. Obtener información del dispositivo
     const [dispRows] = await db.execute(
       `SELECT d.id AS dispositivoId, d.usuario_id AS usuarioId, d.id_tipo_dispositivo 
@@ -103,8 +101,6 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
        LIMIT 1`,
       [sensorId]
     );
-
-    console.log('Dispositivo encontrado:', dispRows[0]);
 
     if (!dispRows.length) return;
 
@@ -116,7 +112,7 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
       `SELECT 
           COALESCE(minimo, 47) AS minimo, 
           COALESCE(maximo, 300) AS maximo,
-          COALESCE(clave_alerta, 'Consumo') AS clave_alerta, 
+          COALESCE(clave_alerta, 'consumo') AS clave_alerta, 
           mensaje
        FROM configuracion_ahorro
        WHERE dispositivo_id = ?
@@ -126,52 +122,36 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
 
     const config = configRows[0] || { minimo: 47, maximo: 300 };
 
-    // 3. Umbrales son directamente en W
+    // 3. Umbrales en W
     const umbralMinimo_W = config.minimo;
     const umbralMaximo_W = config.maximo;
 
-    // 4. Verificar si ya existe alerta hoy
-    const existeHoy = async (tipoAlertaClave) => {
-      const [r] = await db.execute(
-        `SELECT 1 FROM alertas a
-         JOIN tipos_alerta ta ON a.tipo_alerta_id = ta.id
-         WHERE a.dispositivo_id = ?
-           AND ta.clave = ?
-           AND DATE(a.fecha) = CURDATE()
-         LIMIT 1`,
-        [dispositivoId, tipoAlertaClave]
-      );
-      return r.length > 0;
-    };
-
-    const tipoAlertaClave = config.clave_alerta || 'Consumo';
+    // 4. Tipo de alerta
+    const tipoAlertaClave = config.clave_alerta || 'consumo';
+    const tipoAlertaId = await this.obtenerIdTipoAlerta(tipoAlertaClave);
 
     // 5. Alerta por consumo excesivo (en W)
     if (potencia > umbralMaximo_W) {
-      if (!(await existeHoy(tipoAlertaClave))) {
-        await this.crear({
-          usuarioId,
-          mensaje: config.mensaje || `Potencia excesiva: ${potencia} W (supera el máximo de ${umbralMaximo_W} W)`,
-          nivel: 'Alto',
-          idTipoDispositivo: id_tipo_dispositivo,
-          dispositivoId,
-          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave),
-        });
-      }
+      await this.crear({
+        usuarioId,
+        mensaje: config.mensaje || `Potencia excesiva: ${potencia} W (supera el máximo de ${umbralMaximo_W} W)`,
+        nivel: 'Alto',
+        idTipoDispositivo: id_tipo_dispositivo,
+        dispositivoId,
+        tipoAlertaId
+      });
     }
 
     // 6. Alerta por bajo consumo (opcional)
     else if (potencia < umbralMinimo_W) {
-      if (!(await existeHoy(tipoAlertaClave))) {
-        await this.crear({
-          usuarioId,
-          mensaje: config.mensaje || `Baja potencia: ${potencia} W (por debajo del mínimo de ${umbralMinimo_W} W)`,
-          nivel: 'Bajo',
-          idTipoDispositivo: id_tipo_dispositivo,
-          dispositivoId,
-          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave),
-        });
-      }
+      await this.crear({
+        usuarioId,
+        mensaje: config.mensaje || `Baja potencia: ${potencia} W (por debajo del mínimo de ${umbralMinimo_W} W)`,
+        nivel: 'Bajo',
+        idTipoDispositivo: id_tipo_dispositivo,
+        dispositivoId,
+        tipoAlertaId
+      });
     }
 
   } catch (error) {
