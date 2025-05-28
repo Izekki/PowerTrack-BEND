@@ -92,7 +92,9 @@ class AlertModel {
 
   
 static async verificarAlertasPorConsumo(sensorId, potencia) {
-  try {
+ console.log("🔧 [DEBUG] Entrando a verificarAlertasPorConsumo");
+  console.log("sensorId:", sensorId);
+  console.log("potencia:", potencia);  try {
     // 1. Obtener información del dispositivo
     const [dispRows] = await db.execute(
       `SELECT d.id AS dispositivoId, d.usuario_id AS usuarioId, d.id_tipo_dispositivo 
@@ -101,6 +103,8 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
        LIMIT 1`,
       [sensorId]
     );
+
+    console.log('Dispositivo encontrado:', dispRows[0]);
 
     if (!dispRows.length) return;
 
@@ -112,7 +116,7 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
       `SELECT 
           COALESCE(minimo, 47) AS minimo, 
           COALESCE(maximo, 300) AS maximo,
-          COALESCE(clave_alerta, 'consumo') AS clave_alerta, 
+          COALESCE(clave_alerta, 'Consumo') AS clave_alerta, 
           mensaje
        FROM configuracion_ahorro
        WHERE dispositivo_id = ?
@@ -122,14 +126,11 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
 
     const config = configRows[0] || { minimo: 47, maximo: 300 };
 
-    // 3. Calcular consumo en Wh (vatio-hora)
-    const consumoMedicionWh = potencia * (5 / 60); // Ahora sí existe potencia ✅
+    // 3. Umbrales son directamente en W
+    const umbralMinimo_W = config.minimo;
+    const umbralMaximo_W = config.maximo;
 
-    // 4. Umbrales son directamente config.minimo y config.maximo (en W)
-    const umbralMinimo_Wh = config.minimo;
-    const umbralMaximo_Wh = config.maximo;
-
-    // 5. Verificar si ya hay alerta hoy
+    // 4. Verificar si ya existe alerta hoy
     const existeHoy = async (tipoAlertaClave) => {
       const [r] = await db.execute(
         `SELECT 1 FROM alertas a
@@ -143,14 +144,14 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
       return r.length > 0;
     };
 
-    const tipoAlertaClave = config.clave_alerta || 'consumo';
+    const tipoAlertaClave = config.clave_alerta || 'Consumo';
 
-    // 6. Alerta por consumo excesivo (en Wh)
-    if (consumoMedicionWh > umbralMaximo_Wh) {
+    // 5. Alerta por consumo excesivo (en W)
+    if (potencia > umbralMaximo_W) {
       if (!(await existeHoy(tipoAlertaClave))) {
         await this.crear({
           usuarioId,
-          mensaje: config.mensaje || `Consumo excesivo: ${consumoMedicionWh.toFixed(2)} Wh (supera el máximo de ${umbralMaximo_Wh} Wh)`,
+          mensaje: config.mensaje || `Potencia excesiva: ${potencia} W (supera el máximo de ${umbralMaximo_W} W)`,
           nivel: 'Alto',
           idTipoDispositivo: id_tipo_dispositivo,
           dispositivoId,
@@ -159,12 +160,12 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
       }
     }
 
-    // 7. Alerta por bajo consumo (opcional)
-    else if (consumoMedicionWh < umbralMinimo_Wh) {
+    // 6. Alerta por bajo consumo (opcional)
+    else if (potencia < umbralMinimo_W) {
       if (!(await existeHoy(tipoAlertaClave))) {
         await this.crear({
           usuarioId,
-          mensaje: config.mensaje || `Consumo muy bajo: ${consumoMedicionWh.toFixed(2)} Wh (por debajo del mínimo de ${umbralMinimo_Wh} Wh)`,
+          mensaje: config.mensaje || `Baja potencia: ${potencia} W (por debajo del mínimo de ${umbralMinimo_W} W)`,
           nivel: 'Bajo',
           idTipoDispositivo: id_tipo_dispositivo,
           dispositivoId,
