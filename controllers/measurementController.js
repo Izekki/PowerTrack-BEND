@@ -34,6 +34,9 @@ export const createMeasurement = async (req, res) => {
       return res.status(404).json({ message: "Sensor no encontrado" });
     }
 
+    console.log("sensor.id:", sensor.id); // ✅ Asegúrate que sea número
+    console.log("potencia:", potencia); 
+
     // Guardar la medición
     await saveMeasurement(
       sensor.id,
@@ -48,9 +51,13 @@ export const createMeasurement = async (req, res) => {
 
     // Calcular consumo en kWh (5 minutos por medición)
     const consumoMedicionKWh = (potencia / 1000) * (5/60);
-
     // Verificar alertas (no bloqueante)
-    AlertModel.verificarAlertasPorConsumo(sensor.id, consumoMedicionKWh)
+
+    console.log("Llamando a verificarAlertasPorConsumo con:");
+    console.log("sensor.id:", sensor.id);
+    console.log("potencia:", potencia);
+
+    AlertModel.verificarAlertasPorConsumo(sensor.id, potencia)
       .catch(e => console.error('Error en verificación de alertas:', e));
 
     res.status(201).json({ message: "Medición guardada correctamente" });

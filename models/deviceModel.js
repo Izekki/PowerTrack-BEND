@@ -16,12 +16,27 @@ export const updateDevice = async (id, name, ubicacion, id_usuario, id_grupo) =>
 
 export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo, id_sensor) => {
   const [result] = await db.query(
-    `INSERT INTO dispositivos (nombre, ubicacion, usuario_id, id_grupo, id_sensor) 
-     VALUES (?, ?, ?, ?, ?)`, 
-    [nombre, ubicacion, usuario_id, id_grupo, id_sensor]
+    `INSERT INTO dispositivos 
+      (nombre, ubicacion, usuario_id, id_grupo, id_sensor, id_tipo_dispositivo) 
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [nombre, ubicacion, usuario_id, id_grupo, id_sensor, 0]
   );
-  return result.insertId;  // Devuelve el ID del nuevo dispositivo
+  return result.insertId;
 };
+
+export const getConsumoLimitesPorTipoDispositivo = async (id_tipo_dispositivo) => {
+  const [rows] = await db.query(
+    `SELECT consumo_minimo_w, consumo_maximo_w FROM tipos_dispositivos WHERE id = ?`,
+    [id_tipo_dispositivo]
+  );
+
+  if (rows.length === 0) {
+    throw new Error(`Tipo de dispositivo con ID ${id_tipo_dispositivo} no encontrado`);
+  }
+
+  return rows[0]; // Devuelve { consumo_minimo_w, consumo_maximo_w }
+};
+
 
 export const getAllDevices = async () => {
   try {

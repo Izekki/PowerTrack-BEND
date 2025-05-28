@@ -1,8 +1,8 @@
 import { getDeviceByIdFromDB, updateDevice, 
   createDevice, getAllDevices,getUnassignedDevicesFromDB, 
-  getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB } from '../models/deviceModel.js';
+  getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB,getConsumoLimitesPorTipoDispositivo } from '../models/deviceModel.js';
 import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
-import { createConfiguracion } from './savingsSettinsController.js';
+import {insertConfiguracionAhorro,updateConfiguracionAhorroMinAndMax} from '../models/savingsSettinsModel.js'
 import { getSensorByDeviceId,updateSensorMac } from '../models/sensorModel.js';
 
 export const editDevice = async (req, res) => {
@@ -83,15 +83,19 @@ export const addDevice = async (req, res) => {
       dispositivo_id: newDeviceId
     });
 
+    // Obtener tipo de dispositivo (siempre 0 por ahora)
+    const { consumo_minimo_w, consumo_maximo_w } = await getConsumoLimitesPorTipoDispositivo(0);
+
+    const mensaje = null;
     // Crear configuración inicial en configuracion_ahorro (valores por defecto)
-    await createConfiguracion({
+    await insertConfiguracionAhorro(
       usuario_id,
-      dispositivo_id: newDeviceId,
-      minimo: 0.05,  
-      maximo: 0.83,
-      clave_alerta: 'consumo',
-      mensaje: null
-    });
+      newDeviceId,
+      consumo_minimo_w,
+      consumo_maximo_w,
+      "consumo",
+      null // mensaje
+    );
 
     res.status(201).json({ 
       message: 'Dispositivo, sensor y configuración creados exitosamente', 
@@ -152,15 +156,33 @@ export const updateTipoDispositivo = async (req, res) => {
   const { id_tipo_dispositivo } = req.body;
 
   try {
+    // 1. Actualizar el tipo del dispositivo
     const updated = await updateDeviceType(id, id_tipo_dispositivo);
-    if (updated) {
-      res.json({ message: "Ícono del dispositivo actualizado correctamente" });
-    } else {
-      res.status(404).json({ error: "Dispositivo no encontrado o sin cambios" });
+    if (!updated) {
+      return res.status(404).json({ error: "Dispositivo no encontrado o sin cambios" });
     }
+
+    // 2. Obtener nuevos límites desde tipos_dispositivos
+    const { consumo_minimo_w, consumo_maximo_w } = await getConsumoLimitesPorTipoDispositivo(id_tipo_dispositivo);
+
+    // 3. Actualizar la configuración de ahorro asociada al dispositivo
+    const updatedConfig = await updateConfiguracionAhorroMinAndMax(
+      id,
+      consumo_minimo_w,
+      consumo_maximo_w
+    );
+
+    if (!updatedConfig) {
+      return res.status(500).json({ warning: "Configuración no actualizada, pero tipo sí lo fue." });
+    }
+
+    res.json({
+      message: "Tipo de dispositivo y configuración de ahorro actualizados correctamente"
+    });
+
   } catch (error) {
     console.error("Error al actualizar el ícono:", error);
-    res.status(500).json({ error: "Error al actualizar el ícono" });
+    res.status(500).json({ error: "Error al actualizar el ícono y configuración" });
   }
 };
 

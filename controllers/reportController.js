@@ -25,13 +25,19 @@ const generateUserReport = async (req, res) => {
 
     // Get consumption data using the new function with date range
     const consumoData = await electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuarioConRango(userId, fechaInicio, fechaFinal);
-    
-    // If no consumption data, handle appropriately
+
+    // Formatear consumo por día
+    const consumoPorDia = consumoData.consumoPorDia.map(item => ({
+      fecha: item.fecha,
+      consumoKWh: safeToFixed(item.consumoKWh, 4)
+    }));
+
+    // Validación si no hay datos
     if (!consumoData || !consumoData.resumenGrupos || consumoData.resumenGrupos.length === 0) {
       return res.status(404).json({ message: 'No se encontraron datos de consumo para el período solicitado' });
     }
 
-    // Calculate summary - using the correct data structure
+    // Cálculos generales
     const consumoTotalPeriodo = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.consumoTotalKWh, 0);
     const costoTotalPeriodo = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.costoTotalMXN, 0);
     const consumoDiarioTotal = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.consumoDiarioTotalKWh, 0);
@@ -39,14 +45,14 @@ const generateUserReport = async (req, res) => {
     const consumoMensualTotal = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.consumoMensualTotalKWh, 0);
     const costoMensualTotal = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.costoMensualTotalMXN, 0);
 
-    // Calcular consumo por día en el período
+    // Calcular días entre fechas
     const fechaInicioDate = new Date(fechaInicio);
     const fechaFinalDate = new Date(fechaFinal);
     const diffTime = Math.abs(fechaFinalDate - fechaInicioDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 para incluir ambos días
-    const consumoPorDia = consumoTotalPeriodo / diffDays;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const consumoPromedioPorDia = consumoTotalPeriodo / diffDays;
 
-    // Format groups and devices data
+    // Formato grupos y dispositivos
     const grupos = consumoData.resumenGrupos.map(grupo => ({
       nombre: grupo.nombre,
       consumoTotalKWh: safeToFixed(grupo.consumoTotalKWh, 4),
@@ -55,7 +61,7 @@ const generateUserReport = async (req, res) => {
       costoDiarioTotalMXN: safeToFixed(grupo.costoDiarioTotalMXN, 2),
       consumoMensualTotalKWh: safeToFixed(grupo.consumoMensualTotalKWh, 4),
       costoMensualTotalMXN: safeToFixed(grupo.costoMensualTotalMXN, 2),
-      consumoPorDiaKWh: safeToFixed(grupo.consumoTotalKWh / diffDays, 4), // Consumo por día para el grupo
+      consumoPorDiaKWh: safeToFixed(grupo.consumoTotalKWh / diffDays, 4),
       dispositivos: grupo.dispositivos.map(dispositivo => ({
         nombre: dispositivo.nombre,
         dispositivo_id: dispositivo.dispositivo_id,
@@ -67,7 +73,7 @@ const generateUserReport = async (req, res) => {
         costoDiarioMXN: safeToFixed(dispositivo.costoDiarioMXN, 2),
         consumoMensualKWh: safeToFixed(dispositivo.consumoMensualKWh, 4),
         costoMensualMXN: safeToFixed(dispositivo.costoMensualMXN, 2),
-        consumoPorDiaKWh: safeToFixed(dispositivo.consumoActualKWh * (24 * 60) / 5 / diffDays, 4), // Consumo por día para el dispositivo
+        consumoPorDiaKWh: safeToFixed(dispositivo.consumoActualKWh * (24 * 60) / 5 / diffDays, 4),
         detalleTarifas: {
           cargo_variable: dispositivo.detalleTarifas.cargo_variable,
           cargo_capacidad: dispositivo.detalleTarifas.cargo_capacidad,
@@ -77,7 +83,15 @@ const generateUserReport = async (req, res) => {
       }))
     }));
 
-    // Construct the JSON response
+    // Obtener hora de generación en formato "8:55:13 a.m."
+    const horaGeneracion = new Date().toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    }).toLowerCase();
+
+    // Construir JSON del reporte
     const reporteJson = {
       usuario: {
         id: user.id,
@@ -85,8 +99,8 @@ const generateUserReport = async (req, res) => {
         correo: user.correo,
         fechaInicio,
         fechaFinal,
-        fechaGeneracion: new Date().toLocaleString(),
-        diasEnPeriodo: diffDays // Agregado para referencia
+        fechaGeneracion: horaGeneracion, // <-- Aquí está el cambio
+        diasEnPeriodo: diffDays
       },
       resumenGeneral: {
         consumoTotalPeriodoKWh: safeToFixed(consumoTotalPeriodo, 4),
@@ -95,13 +109,14 @@ const generateUserReport = async (req, res) => {
         costoDiarioTotalMXN: safeToFixed(costoDiarioTotal, 2),
         consumoMensualTotalKWh: safeToFixed(consumoMensualTotal, 4),
         costoMensualTotalMXN: safeToFixed(costoMensualTotal, 2),
-        consumoPorDiaKWh: safeToFixed(consumoPorDia, 4), // Nuevo campo agregado
-        costoPorDiaMXN: safeToFixed(costoTotalPeriodo / diffDays, 2) // Campo adicional útil
+        consumoPorDiaKWh: safeToFixed(consumoPromedioPorDia, 4),
+        costoPorDiaMXN: safeToFixed(costoTotalPeriodo / diffDays, 2)
       },
-      grupos
+      grupos,
+      consumoPorDia
     };
 
-    // Return JSON response
+    // Devolver respuesta
     return res.status(200).json(reporteJson);
 
   } catch (error) {
