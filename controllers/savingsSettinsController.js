@@ -1,7 +1,9 @@
 import { 
   insertConfiguracionAhorro, 
   fetchConfiguracionByDevice, 
-  updateConfiguracionByDevice 
+  updateConfiguracionByDevice,
+  getConfiguracionesPorUsuario,
+  updateConfiguracionAhorroMinAndMax
 } from '../models/savingsSettinsModel.js';
 
 // Crear configuración (generalmente lo usarás al crear dispositivo)
@@ -55,5 +57,54 @@ export const updateConfiguracion = async (req, res) => {
   } catch (error) {
     console.error('Error al actualizar configuración:', error);
     res.status(500).json({ message: 'Error al actualizar configuración', error });
+  }
+};
+
+export const getConfiguracionesAhorroPorUsuario = async (req, res) => {
+  const { usuario_id } = req.params;
+
+  try {
+    const configuraciones = await getConfiguracionesPorUsuario(usuario_id);
+
+    if (!configuraciones.length) {
+      return res.status(404).json({
+        message: 'No se encontraron configuraciones para este usuario'
+      });
+    }
+    const formattedConfiguraciones = configuraciones.map(conf => ({
+      ...conf,
+      minimo: parseFloat(conf.minimo),
+      maximo: parseFloat(conf.maximo)
+    }));
+
+    return res.json({
+      total: formattedConfiguraciones.length,
+      configuraciones: formattedConfiguraciones
+    });
+
+  } catch (error) {
+    console.error('Error al obtener configuraciones:', error);
+    return res.status(500).json({ error: 'Error al obtener las configuraciones' });
+  }
+};
+
+
+export const postUpdateMinMax = async (req, res) => {
+  const { dispositivo_id, minimo, maximo } = req.body;
+
+  if (!dispositivo_id || minimo === undefined || maximo === undefined) {
+    return res.status(400).json({ error: 'Faltan datos requeridos' });
+  }
+
+  try {
+    const updated = await updateConfiguracionAhorroMinAndMax(dispositivo_id, minimo, maximo);
+    if (!updated) {
+      return res.status(500).json({ error: 'No se pudo actualizar la configuración' });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error al actualizar min/max:', error);
+    return res.status(500).json({ error: 'Error interno al actualizar' });
   }
 };

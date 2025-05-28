@@ -1,5 +1,6 @@
 import express from 'express';
 import ElectricalAnalysisController from '../controllers/ElectricalAnalysisController.js';
+import { createMeasurement } from '../controllers/measurementController.js';
 
 const router = express.Router();
 const eac = new ElectricalAnalysisController(); 
@@ -22,7 +23,8 @@ router.get("/historial_detallado/:idUsuario", eac.getHistorialDetalladoPorRango)
 router.get('/dispositivo/:idSensor/consumo-actual-por-rango',eac.getConsumoPorRango)
 
 
-
+//prueba
+router.post('/mediciones/guardar',createMeasurement)
 
 
 router.use((req, res) => {

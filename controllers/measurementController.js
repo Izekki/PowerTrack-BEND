@@ -50,7 +50,7 @@ export const createMeasurement = async (req, res) => {
     const consumoMedicionKWh = (potencia / 1000) * (5/60);
 
     // Verificar alertas (no bloqueante)
-    AlertModel.verificarAlertasPorConsumo(sensor.id, consumoMedicionKWh)
+    AlertModel.verificarAlertasPorConsumo(sensor.id, potencia)
       .catch(e => console.error('Error en verificación de alertas:', e));
 
     res.status(201).json({ message: "Medición guardada correctamente" });

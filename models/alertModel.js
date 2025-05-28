@@ -91,86 +91,90 @@ class AlertModel {
 
 
   
-static async verificarAlertasPorConsumo(sensorId, consumoMedicionKWh) {
+static async verificarAlertasPorConsumo(sensorId, potencia) {
   try {
     // 1. Obtener información del dispositivo
     const [dispRows] = await db.execute(
-      `SELECT d.id AS dispositivoId, d.usuario_id AS usuarioId, 
-              d.id_tipo_dispositivo AS idTipoDispositivo
+      `SELECT d.id AS dispositivoId, d.usuario_id AS usuarioId, d.id_tipo_dispositivo 
        FROM dispositivos d
        WHERE d.id_sensor = ?
        LIMIT 1`,
       [sensorId]
     );
-    
-    if (!dispRows.length) return;
-    
-    const dispositivo = dispRows[0];
-    const { usuarioId, idTipoDispositivo, dispositivoId } = dispositivo;
 
-    // 2. Obtener configuración de ahorro (con valores por defecto)
+    if (!dispRows.length) return;
+
+    const dispositivo = dispRows[0];
+    const { usuarioId, dispositivoId, id_tipo_dispositivo } = dispositivo;
+
+    // 2. Obtener configuración de ahorro
     const [configRows] = await db.execute(
       `SELECT 
-          COALESCE(minimo, 0.05) AS minimo, 
-          COALESCE(maximo, 0.83) AS maximo, 
-          COALESCE(clave_alerta, 'Consumo') AS clave_alerta, 
+          COALESCE(minimo, 47) AS minimo, 
+          COALESCE(maximo, 300) AS maximo,
+          COALESCE(clave_alerta, 'consumo') AS clave_alerta, 
           mensaje
        FROM configuracion_ahorro
-       WHERE (usuario_id = ? OR usuario_id IS NULL)
-         AND (dispositivo_id = ? OR dispositivo_id IS NULL)
-       ORDER BY usuario_id DESC, dispositivo_id DESC
+       WHERE dispositivo_id = ?
        LIMIT 1`,
-      [usuarioId, dispositivoId]
+      [dispositivoId]
     );
 
-    const config = configRows[0] || { minimo: 0.05, maximo: 0.83 };
+    const config = configRows[0] || { minimo: 47, maximo: 300 };
 
-    // 3. Verificar si ya existe alerta hoy
+    // 3. Calcular consumo en Wh (vatio-hora)
+    const consumoMedicionWh = potencia * (5 / 60); // Ahora sí existe potencia ✅
+
+    // 4. Umbrales son directamente config.minimo y config.maximo (en W)
+    const umbralMinimo_Wh = config.minimo;
+    const umbralMaximo_Wh = config.maximo;
+
+    // 5. Verificar si ya hay alerta hoy
     const existeHoy = async (tipoAlertaClave) => {
       const [r] = await db.execute(
         `SELECT 1 FROM alertas a
          JOIN tipos_alerta ta ON a.tipo_alerta_id = ta.id
-         WHERE a.sensor_id = ? 
+         WHERE a.dispositivo_id = ?
            AND ta.clave = ?
            AND DATE(a.fecha) = CURDATE()
          LIMIT 1`,
-        [sensorId, tipoAlertaClave]
+        [dispositivoId, tipoAlertaClave]
       );
       return r.length > 0;
     };
 
-    // 4. Verificar y crear alertas
-    const tipoAlertaClave = config.clave_alerta || 'Consumo';
-    
-    // Alerta por consumo excesivo
-    if (consumoMedicionKWh > config.maximo) {
+    const tipoAlertaClave = config.clave_alerta || 'consumo';
+
+    // 6. Alerta por consumo excesivo (en Wh)
+    if (consumoMedicionWh > umbralMaximo_Wh) {
       if (!(await existeHoy(tipoAlertaClave))) {
         await this.crear({
           usuarioId,
-          mensaje: config.mensaje || `Consumo excesivo: ${consumoMedicionKWh.toFixed(2)} kWh (supera el máximo de ${config.maximo} kWh)`,
+          mensaje: config.mensaje || `Consumo excesivo: ${consumoMedicionWh.toFixed(2)} Wh (supera el máximo de ${umbralMaximo_Wh} Wh)`,
           nivel: 'Alto',
-          idTipoDispositivo,
-          sensorId,
-          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave)
+          idTipoDispositivo: id_tipo_dispositivo,
+          dispositivoId,
+          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave),
         });
       }
     }
-    // Alerta por consumo bajo (opcional)
-    else if (consumoMedicionKWh < config.minimo) {
+
+    // 7. Alerta por bajo consumo (opcional)
+    else if (consumoMedicionWh < umbralMinimo_Wh) {
       if (!(await existeHoy(tipoAlertaClave))) {
         await this.crear({
           usuarioId,
-          mensaje: config.mensaje || `Consumo muy bajo: ${consumoMedicionKWh.toFixed(2)} kWh (por debajo del mínimo de ${config.minimo} kWh)`,
+          mensaje: config.mensaje || `Consumo muy bajo: ${consumoMedicionWh.toFixed(2)} Wh (por debajo del mínimo de ${umbralMinimo_Wh} Wh)`,
           nivel: 'Bajo',
-          idTipoDispositivo,
-          sensorId,
-          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave)
+          idTipoDispositivo: id_tipo_dispositivo,
+          dispositivoId,
+          tipoAlertaId: await this.obtenerIdTipoAlerta(tipoAlertaClave),
         });
       }
     }
+
   } catch (error) {
-    console.error('Error en verificarAlertasPorConsumo:', error);
-    // No relanzamos el error para no afectar el flujo principal
+    console.error('Error en verificarAlertasPorConsumo:', error.message);
   }
 }
 
@@ -191,7 +195,7 @@ static async obtenerIdTipoAlerta(clave) {
    * @param {string}      params.mensaje         — Texto de la alerta
    * @param {string}      params.nivel           — 'Bajo' | 'Medio' | 'Alto'
    * @param {number|null} params.idTipoDispositivo — FK a tipos_dispositivos
-   * @param {number|null} params.sensorId        — FK a sensor, para alertas de consumo
+   * @param {number|null} params.dispositivoId   — FK a sensor, para alertas de consumo
    * @param {number|null} params.tipoAlertaId    — FK a tipos_alerta
    */
   static async crear({
@@ -199,36 +203,36 @@ static async obtenerIdTipoAlerta(clave) {
     mensaje,
     nivel,
     idTipoDispositivo = null,
-    sensorId = null,
-    tipoAlertaId = null
+    tipoAlertaId = null,
+    dispositivoId = null
   }) {
     try {
       const query = `
         INSERT INTO alertas (
           usuario_id,
-          sensor_id,
           mensaje,
           nivel,
           id_tipo_dispositivo,
-          tipo_alerta_id
+          tipo_alerta_id,
+          dispositivo_id
         ) VALUES (?, ?, ?, ?, ?, ?)
       `;
       const [result] = await db.execute(query, [
         usuarioId,
-        sensorId,
         mensaje,
         nivel,
         idTipoDispositivo,
-        tipoAlertaId
+        tipoAlertaId,
+        dispositivoId
       ]);
       return {
         id: result.insertId,
         usuarioId,
-        sensorId,
         mensaje,
         nivel,
         idTipoDispositivo,
-        tipoAlertaId
+        tipoAlertaId,
+        dispositivoId
       };
     } catch (err) {
       throw new Error(`Error al crear alerta: ${err.message}`);
