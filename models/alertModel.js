@@ -51,30 +51,31 @@ class AlertModel {
   }
 
   // Recupera todas las alertas de un usuario, con info de dispositivo y tipo de alerta
-  static async obtenerPorUsuario(usuarioId) {
+  static async obtenerPorUsuario(usuarioId, offset = 0, limit = 10) {
     try {
       const query = `
-        SELECT
-          a.id,
-          a.mensaje,
-          a.nivel,
-          a.fecha,
-          td.nombre AS tipo_dispositivo,
-          ta.clave    AS tipo_alerta_clave,
-          ta.nombre   AS tipo_alerta_nombre,
-          ta.icono_svg
-        FROM alertas a
-        LEFT JOIN tipos_dispositivos td ON a.id_tipo_dispositivo = td.id
-        LEFT JOIN tipos_alerta     ta ON a.tipo_alerta_id     = ta.id
-        WHERE a.usuario_id = ?
-        ORDER BY a.fecha DESC
-      `;
-      const [rows] = await db.execute(query, [usuarioId]);
+      SELECT
+        a.id,
+        a.mensaje,
+        a.nivel,
+        a.fecha,
+        td.nombre AS tipo_dispositivo,
+        ta.clave    AS tipo_alerta_clave,
+        ta.nombre   AS tipo_alerta_nombre,
+        ta.icono_svg
+      FROM alertas a
+      LEFT JOIN tipos_dispositivos td ON a.id_tipo_dispositivo = td.id
+      LEFT JOIN tipos_alerta     ta ON a.tipo_alerta_id     = ta.id
+      WHERE a.usuario_id = ?
+      ORDER BY a.fecha DESC
+      LIMIT ? OFFSET ?
+    `;
+      const [rows] = await db.execute(query, [usuarioId, Number(limit), Number(offset)]);
       return rows;
     } catch (err) {
       throw new Error(`Error al obtener alertas: ${err.message}`);
-    }
-  }
+    }
+  }
 
   // Elimina una alerta si pertenece al usuario
   static async eliminar(id, usuarioId) {
