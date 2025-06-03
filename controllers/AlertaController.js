@@ -5,12 +5,14 @@ class AlertaController {
   static async obtenerPorUsuario(req, res) {
     try {
       const { usuarioId } = req.params;
-      const alertas = await AlertModel.obtenerPorUsuario(usuarioId);
+      const { offset = 0, limit = 10 } = req.query;
+
+      const alertas = await AlertModel.obtenerPorUsuario(usuarioId, offset, limit);
       res.json(alertas);
     } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  }
+      res.status(500).json({ error: error.message });
+    }
+  }
 
   // 🔹 Crear alertas predeterminadas al registrar un nuevo dispositivo
   static async generarPorTipoDispositivo(req, res) {
