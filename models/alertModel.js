@@ -10,11 +10,16 @@ class AlertModel {
         [tipoDispositivoId]
       );
       const tipo = tipos[0];
-      if (!tipo) throw new Error('Tipo de dispositivo no encontrado.');
+      if (!tipo) throw new Error("Tipo de dispositivo no encontrado.");
 
       const alertas = this.generarAlertasDefault(tipo);
       for (const alerta of alertas) {
-        await this.crear({ usuarioId, mensaje: alerta.mensaje, nivel: alerta.nivel, idTipoDispositivo: tipoDispositivoId });
+        await this.crear({
+          usuarioId,
+          mensaje: alerta.mensaje,
+          nivel: alerta.nivel,
+          idTipoDispositivo: tipoDispositivoId,
+        });
       }
       return alertas;
     } catch (err) {
@@ -28,54 +33,128 @@ class AlertModel {
     const alertas = [];
 
     if (consumo_maximo_w) {
-      alertas.push({ mensaje: `${nombre}: Consumo superior a ${consumo_maximo_w}W detectado`, nivel: 'Alto' });
+      alertas.push({
+        mensaje: `${nombre}: Consumo superior a ${consumo_maximo_w}W detectado`,
+        nivel: "Alto",
+      });
     }
     if (consumo_minimo_w) {
-      alertas.push({ mensaje: `${nombre}: Consumo inferior a ${consumo_minimo_w}W detectado`, nivel: 'Medio' });
+      alertas.push({
+        mensaje: `${nombre}: Consumo inferior a ${consumo_minimo_w}W detectado`,
+        nivel: "Medio",
+      });
     }
     switch (nombre.toLowerCase()) {
-      case 'refrigerador':
-        alertas.push({ mensaje: `${nombre}: Posible falla en sistema de refrigeración`, nivel: 'Alto' });
+      case "refrigerador":
+        alertas.push({
+          mensaje: `${nombre}: Posible falla en sistema de refrigeración`,
+          nivel: "Alto",
+        });
         break;
-      case 'aire acondicionado':
-        alertas.push({ mensaje: `${nombre}: Eficiencia energética reducida`, nivel: 'Medio' });
+      case "aire acondicionado":
+        alertas.push({
+          mensaje: `${nombre}: Eficiencia energética reducida`,
+          nivel: "Medio",
+        });
         break;
-      case 'calentador':
-      case 'calefactor':
-        alertas.push({ mensaje: `${nombre}: Tiempo de operación excesivo`, nivel: 'Medio' });
+      case "calentador":
+      case "calefactor":
+        alertas.push({
+          mensaje: `${nombre}: Tiempo de operación excesivo`,
+          nivel: "Medio",
+        });
         break;
       default:
-        alertas.push({ mensaje: `${nombre}: Patrón de consumo irregular detectado`, nivel: 'Bajo' });
+        alertas.push({
+          mensaje: `${nombre}: Patrón de consumo irregular detectado`,
+          nivel: "Bajo",
+        });
     }
     return alertas;
   }
 
   // Recupera todas las alertas de un usuario, con info de dispositivo y tipo de alerta
-  static async obtenerPorUsuario(usuarioId, offset = 0, limit = 10) {
-    try {
-      const query = `
+ static async obtenerPorUsuarioPaginado(usuarioId, limit = 10, offset = 0, filtro = 'todos') {
+  try {
+    limit = parseInt(limit);
+    offset = parseInt(offset);
+
+    if (isNaN(limit) || isNaN(offset)) {
+      throw new Error("Limit y offset deben ser números válidos");
+    }
+
+    const baseQuery = `
       SELECT
         a.id,
         a.mensaje,
         a.nivel,
         a.fecha,
         td.nombre AS tipo_dispositivo,
-        ta.clave    AS tipo_alerta_clave,
-        ta.nombre   AS tipo_alerta_nombre,
-        ta.icono_svg
+        ta.clave AS tipo_alerta_clave,
+        ta.nombre AS tipo_alerta_nombre,
+        ta.icono_svg,
+        CASE
+          WHEN ta.clave LIKE '%sistema%' THEN 'sistema'
+          ELSE 'consumo'
+        END AS tipo_alerta_general
       FROM alertas a
       LEFT JOIN tipos_dispositivos td ON a.id_tipo_dispositivo = td.id
-      LEFT JOIN tipos_alerta     ta ON a.tipo_alerta_id     = ta.id
-      WHERE a.usuario_id = ?
-      ORDER BY a.fecha DESC
-      LIMIT ? OFFSET ?
+      LEFT JOIN tipos_alerta ta ON a.tipo_alerta_id = ta.id
     `;
-      const [rows] = await db.execute(query, [usuarioId, Number(limit), Number(offset)]);
-      return rows;
-    } catch (err) {
-      throw new Error(`Error al obtener alertas: ${err.message}`);
-    }
-  }
+
+    // Función auxiliar para construir la consulta sin LIMIT/ORDER BY
+    const buildBaseQuery = (condition) => `
+      ${baseQuery}
+      WHERE a.usuario_id = ? ${condition ? `AND ${condition}` : ''}
+    `;
+
+    let rows = [];
+
+    if (filtro.toLowerCase() === 'todos') {
+      const halfLimit = Math.floor(limit / 2);
+      const remaining = limit - halfLimit;
+
+      // Consulta para consumo
+      const queryConsumo = `
+        ${buildBaseQuery("ta.clave NOT LIKE '%sistema%'")}
+        ORDER BY a.fecha DESC
+        LIMIT ${halfLimit} OFFSET ${offset}
+      `;
+
+      // Consulta para sistema
+      const querySistema = `
+        ${buildBaseQuery("ta.clave LIKE '%sistema%'")}
+        ORDER BY a.fecha DESC
+        LIMIT ${remaining} OFFSET ${offset}
+      `;
+
+      const [rowsConsumo] = await db.execute(queryConsumo, [usuarioId]);
+      const [rowsSistema] = await db.execute(querySistema, [usuarioId]);
+
+      rows = [...rowsConsumo, ...rowsSistema];
+    } else {
+      let condition = '';
+      if (filtro.toLowerCase() === 'consumo') {
+        condition = "ta.clave NOT LIKE '%sistema%'";
+      } else if (filtro.toLowerCase() === 'sistema') {
+        condition = "ta.clave LIKE '%sistema%'";
+      }
+
+      const query = `
+        ${buildBaseQuery(condition)}
+        ORDER BY a.fecha DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+
+      const [result] = await db.execute(query, [usuarioId]);
+      rows = result;
+    }
+
+    return rows;
+  } catch (err) {
+    throw new Error(`Error al obtener alertas: ${err.message}`);
+  }
+}
 
   // Elimina una alerta si pertenece al usuario
   static async eliminar(id, usuarioId) {
@@ -90,27 +169,25 @@ class AlertModel {
     }
   }
 
-
-  
-static async verificarAlertasPorConsumo(sensorId, potencia) {
-  try {
-    // 1. Obtener información del dispositivo
-    const [dispRows] = await db.execute(
-      `SELECT d.id AS dispositivoId, d.usuario_id AS usuarioId, d.id_tipo_dispositivo 
+  static async verificarAlertasPorConsumo(sensorId, potencia) {
+    try {
+      // 1. Obtener información del dispositivo
+      const [dispRows] = await db.execute(
+        `SELECT d.id AS dispositivoId, d.usuario_id AS usuarioId, d.id_tipo_dispositivo 
        FROM dispositivos d
        WHERE d.id_sensor = ?
        LIMIT 1`,
-      [sensorId]
-    );
+        [sensorId]
+      );
 
-    if (!dispRows.length) return;
+      if (!dispRows.length) return;
 
-    const dispositivo = dispRows[0];
-    const { usuarioId, dispositivoId, id_tipo_dispositivo } = dispositivo;
+      const dispositivo = dispRows[0];
+      const { usuarioId, dispositivoId, id_tipo_dispositivo } = dispositivo;
 
-    // 2. Obtener configuración de ahorro
-    const [configRows] = await db.execute(
-      `SELECT 
+      // 2. Obtener configuración de ahorro
+      const [configRows] = await db.execute(
+        `SELECT 
           COALESCE(minimo, 47) AS minimo, 
           COALESCE(maximo, 300) AS maximo,
           COALESCE(clave_alerta, 'consumo') AS clave_alerta, 
@@ -118,56 +195,59 @@ static async verificarAlertasPorConsumo(sensorId, potencia) {
        FROM configuracion_ahorro
        WHERE dispositivo_id = ?
        LIMIT 1`,
-      [dispositivoId]
-    );
+        [dispositivoId]
+      );
 
-    const config = configRows[0] || { minimo: 47, maximo: 300 };
+      const config = configRows[0] || { minimo: 47, maximo: 300 };
 
-    // 3. Umbrales en W
-    const umbralMinimo_W = config.minimo;
-    const umbralMaximo_W = config.maximo;
+      // 3. Umbrales en W
+      const umbralMinimo_W = config.minimo;
+      const umbralMaximo_W = config.maximo;
 
-    // 4. Tipo de alerta
-    const tipoAlertaClave = config.clave_alerta || 'consumo';
-    const tipoAlertaId = await this.obtenerIdTipoAlerta(tipoAlertaClave);
+      // 4. Tipo de alerta
+      const tipoAlertaClave = config.clave_alerta || "consumo";
+      const tipoAlertaId = await this.obtenerIdTipoAlerta(tipoAlertaClave);
 
-    // 5. Alerta por consumo excesivo (en W)
-    if (potencia > umbralMaximo_W) {
-      await this.crear({
-        usuarioId,
-        mensaje: config.mensaje || `Potencia excesiva: ${potencia} W (supera el máximo de ${umbralMaximo_W} W)`,
-        nivel: 'Alto',
-        idTipoDispositivo: id_tipo_dispositivo,
-        dispositivoId,
-        tipoAlertaId
-      });
+      // 5. Alerta por consumo excesivo (en W)
+      if (potencia > umbralMaximo_W) {
+        await this.crear({
+          usuarioId,
+          mensaje:
+            config.mensaje ||
+            `Potencia excesiva: ${potencia} W (supera el máximo de ${umbralMaximo_W} W)`,
+          nivel: "Alto",
+          idTipoDispositivo: id_tipo_dispositivo,
+          dispositivoId,
+          tipoAlertaId,
+        });
+      }
+
+      // 6. Alerta por bajo consumo (opcional)
+      else if (potencia < umbralMinimo_W) {
+        await this.crear({
+          usuarioId,
+          mensaje:
+            config.mensaje ||
+            `Baja potencia: ${potencia} W (por debajo del mínimo de ${umbralMinimo_W} W)`,
+          nivel: "Bajo",
+          idTipoDispositivo: id_tipo_dispositivo,
+          dispositivoId,
+          tipoAlertaId,
+        });
+      }
+    } catch (error) {
+      console.error("Error en verificarAlertasPorConsumo:", error.message);
     }
-
-    // 6. Alerta por bajo consumo (opcional)
-    else if (potencia < umbralMinimo_W) {
-      await this.crear({
-        usuarioId,
-        mensaje: config.mensaje || `Baja potencia: ${potencia} W (por debajo del mínimo de ${umbralMinimo_W} W)`,
-        nivel: 'Bajo',
-        idTipoDispositivo: id_tipo_dispositivo,
-        dispositivoId,
-        tipoAlertaId
-      });
-    }
-
-  } catch (error) {
-    console.error('Error en verificarAlertasPorConsumo:', error.message);
   }
-}
 
-// Helper para obtener ID de tipo de alerta
-static async obtenerIdTipoAlerta(clave) {
-  const [tipos] = await db.execute(
-    `SELECT id FROM tipos_alerta WHERE clave = ? LIMIT 1`,
-    [clave]
-  );
-  return tipos[0]?.id || null;
-}
+  // Helper para obtener ID de tipo de alerta
+  static async obtenerIdTipoAlerta(clave) {
+    const [tipos] = await db.execute(
+      `SELECT id FROM tipos_alerta WHERE clave = ? LIMIT 1`,
+      [clave]
+    );
+    return tipos[0]?.id || null;
+  }
 
   /**
    * Crea una alerta manual o automática.
@@ -186,7 +266,7 @@ static async obtenerIdTipoAlerta(clave) {
     nivel,
     idTipoDispositivo = null,
     tipoAlertaId = null,
-    dispositivoId = null
+    dispositivoId = null,
   }) {
     try {
       const query = `
@@ -205,7 +285,7 @@ static async obtenerIdTipoAlerta(clave) {
         nivel,
         idTipoDispositivo,
         tipoAlertaId,
-        dispositivoId
+        dispositivoId,
       ]);
       return {
         id: result.insertId,
@@ -214,7 +294,7 @@ static async obtenerIdTipoAlerta(clave) {
         nivel,
         idTipoDispositivo,
         tipoAlertaId,
-        dispositivoId
+        dispositivoId,
       };
     } catch (err) {
       throw new Error(`Error al crear alerta: ${err.message}`);
