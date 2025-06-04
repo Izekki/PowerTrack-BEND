@@ -868,37 +868,42 @@ async getHistorialDetalladoPorRango(idUsuario) {
   const idDispositivos = dispositivos.map(d => d.dispositivo_id);
   const placeholders = idDispositivos.map(() => '?').join(',');
 
-  const now = new Date();
   const rangos = [];
 
-  // 🕐 Rango día: cada hora de hoy
-  {
-    const inicio = new Date(now);
-    inicio.setHours(0, 0, 0, 0);
-    const fechaInicio = inicio.toISOString().slice(0, 19).replace("T", " ");
-    const fechaFinal = now.toISOString().slice(0, 19).replace("T", " ");
+  const pad = (n) => n.toString().padStart(2, '0');
+  const now = new Date();
+{
+  
+  // Inicio del día en hora local
+  const inicio = new Date(now);
+  inicio.setHours(0, 0, 0, 0);
 
-    const [rows] = await db.query(`
-      SELECT 
-        HOUR(m.fecha_hora) AS etiqueta,
-        AVG((m.potencia / 1000) * 5 / 60) AS promedio
-      FROM mediciones m
-      INNER JOIN sensores s ON m.sensor_id = s.id
-      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
-      WHERE d.id IN (${placeholders})
-        AND m.fecha_hora BETWEEN ? AND ?
-      GROUP BY etiqueta
-      ORDER BY etiqueta
-    `, [...idDispositivos, fechaInicio, fechaFinal]);
+  // Formatear fechaInicio y fechaFinal en formato local: 'YYYY-MM-DD HH:mm:ss'
+  const fechaInicio = `${inicio.getFullYear()}-${pad(inicio.getMonth() + 1)}-${pad(inicio.getDate())} 00:00:00`;
+  const fechaFinal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-    rangos.push({
-      rango: 'dia',
-      detalles: rows.map(r => ({
-        etiqueta: `${r.etiqueta.toString().padStart(2, '0')}:00`,
-        promedio: parseFloat(Number(r.promedio).toFixed(3))
-      }))
-    });
-  }
+  const [rows] = await db.query(`
+    SELECT 
+      HOUR(m.fecha_hora) AS etiqueta,
+      AVG((m.potencia / 1000) * 5 / 60) AS promedio
+    FROM mediciones m
+    INNER JOIN sensores s ON m.sensor_id = s.id
+    INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+    WHERE d.id IN (${placeholders})
+      AND m.fecha_hora BETWEEN ? AND ?
+    GROUP BY etiqueta
+    ORDER BY etiqueta
+  `, [...idDispositivos, fechaInicio, fechaFinal]);
+
+  rangos.push({
+    rango: 'dia',
+    detalles: rows.map(r => ({
+      etiqueta: `${r.etiqueta.toString().padStart(2, '0')}:00 hrs`,
+      promedio: parseFloat(Number(r.promedio).toFixed(3))
+    }))
+  });
+}
+
 
   {
     const inicio = new Date(now);
@@ -921,40 +926,54 @@ async getHistorialDetalladoPorRango(idUsuario) {
 
     rangos.push({
       rango: 'semana',
-      detalles: rows.map(r => ({
-        etiqueta: r.etiqueta,
-        promedio: parseFloat(Number(r.promedio).toFixed(3))
-      }))
+      detalles: rows.map(r => {
+        const fecha = new Date(r.etiqueta);
+        const opciones = { day: '2-digit', month: 'short', year: 'numeric' };
+        const fechaLocal = fecha.toLocaleDateString('es-MX', opciones);
+        return {
+          etiqueta: fechaLocal,
+          promedio: parseFloat(Number(r.promedio).toFixed(3))
+        };
+      })
     });
   }
 
   {
-    const inicio = new Date(now);
-    inicio.setDate(now.getDate() - 28);
-    const fechaInicio = inicio.toISOString().slice(0, 19).replace("T", " ");
-    const fechaFinal = now.toISOString().slice(0, 19).replace("T", " ");
+    const opciones = { day: '2-digit', month: 'short', year: 'numeric' };
+    const semanasMes = [];
 
-    const [rows] = await db.query(`
-      SELECT 
-        YEARWEEK(m.fecha_hora, 1) AS etiqueta,
-        AVG((m.potencia / 1000) * 5 / 60) AS promedio
-      FROM mediciones m
-      INNER JOIN sensores s ON m.sensor_id = s.id
-      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
-      WHERE d.id IN (${placeholders})
-        AND m.fecha_hora BETWEEN ? AND ?
-      GROUP BY etiqueta
-      ORDER BY etiqueta
-    `, [...idDispositivos, fechaInicio, fechaFinal]);
+    for (let i = 0; i < 4; i++) {
+      const fin = new Date(now);
+      fin.setDate(now.getDate() - (i * 7));
+      const inicio = new Date(fin);
+      inicio.setDate(fin.getDate() - 6);
+
+      const fechaInicio = inicio.toISOString().slice(0, 19).replace("T", " ");
+      const fechaFinal = fin.toISOString().slice(0, 19).replace("T", " ");
+
+      const [rows] = await db.query(`
+        SELECT 
+          AVG((m.potencia / 1000) * 5 / 60) AS promedio
+        FROM mediciones m
+        INNER JOIN sensores s ON m.sensor_id = s.id
+        INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+        WHERE d.id IN (${placeholders})
+          AND m.fecha_hora BETWEEN ? AND ?
+      `, [...idDispositivos, fechaInicio, fechaFinal]);
+
+      const promedio = parseFloat(Number(rows[0].promedio ?? 0).toFixed(3));
+      const etiqueta = `${inicio.toLocaleDateString('es-MX', opciones)} - ${fin.toLocaleDateString('es-MX', opciones)}`;
+
+      semanasMes.unshift({ etiqueta, promedio }); // unshift para orden ascendente
+    }
 
     rangos.push({
       rango: 'mes',
-      detalles: rows.map(r => ({
-        etiqueta: `Semana ${r.etiqueta}`,
-        promedio: parseFloat(Number(r.promedio).toFixed(3))
-      }))
+      detalles: semanasMes
     });
   }
+
+
 
   {
     const inicio = new Date(now);
@@ -979,7 +998,10 @@ async getHistorialDetalladoPorRango(idUsuario) {
     rangos.push({
       rango: 'bimestre',
       detalles: rows.map(r => ({
-        etiqueta: r.etiqueta,
+        etiqueta: new Date(`${r.etiqueta}-01`).toLocaleDateString('es-MX', {
+          month: 'long',
+          year: 'numeric'
+        }),
         promedio: parseFloat(Number(r.promedio).toFixed(3))
       }))
     });
