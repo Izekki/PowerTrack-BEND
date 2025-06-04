@@ -509,23 +509,23 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
     console.error("Error en getHistorialResumenPorRango:", error);
     return res.status(500).json({ message: "Error al obtener resumen de consumo", error: error.message });
   }
-};
+  };
 
-getHistorialDetalladoPorRango = async (req, res) => {
-  const { idUsuario } = req.params;
+  getHistorialDetalladoPorRango = async (req, res) => {
+    const { idUsuario } = req.params;
 
-  if (!idUsuario) {
-    return res.status(400).json({ message: "Falta parámetro: idUsuario" });
-  }
+    if (!idUsuario) {
+      return res.status(400).json({ message: "Falta parámetro: idUsuario" });
+    }
 
-  try {
-    const datos = await this.electricalAnalysisModel.getHistorialDetalladoPorRango(idUsuario);
-    return res.status(200).json(datos);
-  } catch (error) {
-    console.error("Error en getHistorialDetalladoPorRango:", error);
-    return res.status(500).json({ message: "Error al obtener historial detallado", error: error.message });
-  }
-};
+    try {
+      const datos = await this.electricalAnalysisModel.getHistorialDetalladoPorRango(idUsuario);
+      return res.status(200).json(datos);
+    } catch (error) {
+      console.error("Error en getHistorialDetalladoPorRango:", error);
+      return res.status(500).json({ message: "Error al obtener historial detallado", error: error.message });
+    }
+  };
 
 
 
