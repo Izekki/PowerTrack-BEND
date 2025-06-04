@@ -629,6 +629,7 @@ getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaIni
     console.log(`Dispositivos encontrados: ${dispositivos.length}`);
     if (!dispositivos.length) return { mensaje: "No hay dispositivos para este usuario" };
 
+    // Obtener nombres de grupos
     const [filasGrupos] = await db.query(
       `SELECT id, nombre FROM grupos WHERE id IN (?)`,
       [dispositivos.map(d => d.grupoId).filter(id => id !== null)]
@@ -646,20 +647,33 @@ getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaIni
     const medicionesPorMes = medicionesPorDia * diasPorMes;
     const factorCarga = 0.9;
 
+    // 👇 Ajustamos la fechaFinReal al último dato disponible
+    const [ultimaMedicion] = await db.query(`
+      SELECT MAX(m.fecha_hora) AS ultima_fecha
+      FROM mediciones m
+      INNER JOIN sensores s ON m.sensor_id = s.id
+      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+      WHERE d.usuario_id = ?
+        AND m.fecha_hora BETWEEN ? AND ?
+    `, [id_usuario, fechaInicio, fechaFin]);
+
+    const fechaFinReal = ultimaMedicion[0]?.ultima_fecha || fechaFin;
+    console.log("Fecha fin real detectada:", fechaFinReal);
+
     let resultados = [];
     let grupos = {};
-    let consumoPorDia = {};  // Aquí guardamos el desglose diario
+    let consumoPorDia = {}; // Aquí guardamos el desglose diario
 
     for (const dispositivo of dispositivos) {
       console.log(`Procesando dispositivo ID: ${dispositivo.dispositivoId}, sensor ID: ${dispositivo.sensorId}`);
 
-      // === Calcular promedio diario (nuevo enfoque) ===
+      // === Calcular promedio diario con fechas reales ===
       const [consumoDiarioRows] = await db.query(
         `SELECT DATE(fecha_hora) AS fecha, AVG(potencia) AS promedio_potencia
          FROM mediciones
          WHERE sensor_id = ? AND fecha_hora BETWEEN ? AND ?
          GROUP BY DATE(fecha_hora)`,
-        [dispositivo.sensorId, fechaInicio, fechaFin]
+        [dispositivo.sensorId, fechaInicio, fechaFinReal]
       );
 
       consumoDiarioRows.forEach(row => {
@@ -671,22 +685,19 @@ getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaIni
         consumoPorDia[fecha] += consumoDiaKWh;
       });
 
-      
-
-
       // === Calcular resumen mensual general (modelo original) ===
       let potenciaW = 0;
       let fecha_hora = null;
 
-      if (fechaInicio && fechaFin) {
+      if (fechaInicio && fechaFinReal) {
         const [promedioRow] = await db.query(
           `SELECT AVG(potencia) AS promedio_potencia
            FROM mediciones
            WHERE sensor_id = ? AND fecha_hora BETWEEN ? AND ?`,
-          [dispositivo.sensorId, fechaInicio, fechaFin]
+          [dispositivo.sensorId, fechaInicio, fechaFinReal]
         );
         potenciaW = parseFloat(promedioRow[0]?.promedio_potencia) || 0;
-        fecha_hora = `${fechaInicio} a ${fechaFin}`;
+        fecha_hora = `${fechaInicio} a ${fechaFinReal}`;
       } else {
         const [filasMedicion] = await db.query(
           `SELECT potencia AS valor, fecha_hora
@@ -760,23 +771,28 @@ getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaIni
       grupos[grupoKey].consumoMensualTotalKWh += consumoMensualKWh;
       grupos[grupoKey].costoMensualTotalMXN += parseFloat(costoMensualTotal.toFixed(2));
     }
+
     const consumoPorDiaArray = Object.entries(consumoPorDia).map(
-        ([fecha, consumo]) => ({
-          fecha,
-          consumoKWh: consumo,
-        })
-      );
+      ([fecha, consumo]) => ({
+        fecha,
+        consumoKWh: consumo,
+      })
+    );
+
     return {
       resumenDispositivos: resultados,
       resumenGrupos: Object.values(grupos),
-      consumoPorDia: consumoPorDiaArray
+      consumoPorDia: consumoPorDiaArray,
+      fechaInicio,
+      fechaFinSolicitada: fechaFin,
+      fechaFinReal
     };
+
   } catch (error) {
     console.error("Error en getConsumoPorDispositivosYGruposPorUsuarioConRango:", error);
     throw error;
   }
 };
-
 
 
 
