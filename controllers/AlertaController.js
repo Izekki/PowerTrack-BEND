@@ -15,6 +15,39 @@ class AlertaController {
     res.status(500).json({ error: error.message });
   }
 }
+//Marcar alertas como leidas
+static async marcarLeidas(req, res) {
+  try {
+    const { usuarioId } = req.params;
+    await AlertModel.marcarComoLeidas(usuarioId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+//verificar alertas no leidas
+static async verificarNuevas(req, res) {
+  try {
+    const { usuarioId } = req.params;
+    const hayNuevas = await AlertModel.hayAlertasNoLeidas(usuarioId);
+    res.json({ nuevas: hayNuevas });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+//Marcar una sola alerta
+static async marcarUnaLeida(req, res) {
+  try {
+    const { alertaId } = req.params;
+    await AlertModel.marcarUnaComoLeida(alertaId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 
 
   // 🔹 Crear alertas predeterminadas al registrar un nuevo dispositivo

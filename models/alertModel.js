@@ -93,6 +93,7 @@ class AlertModel {
         ta.clave AS tipo_alerta_clave,
         ta.nombre AS tipo_alerta_nombre,
         ta.icono_svg,
+        a.leida,
         CASE
           WHEN ta.clave LIKE '%sistema%' THEN 'sistema'
           ELSE 'consumo'
@@ -102,26 +103,25 @@ class AlertModel {
       LEFT JOIN tipos_alerta ta ON a.tipo_alerta_id = ta.id
     `;
 
-    // Función auxiliar para construir la consulta sin LIMIT/ORDER BY
-    const buildBaseQuery = (condition) => `
+    const buildBaseQuery = (condition = "") => `
       ${baseQuery}
-      WHERE a.usuario_id = ? ${condition ? `AND ${condition}` : ''}
+      WHERE a.usuario_id = ? AND a.leida = 0 ${
+        condition ? `AND ${condition}` : ""
+      }
     `;
 
     let rows = [];
 
-    if (filtro.toLowerCase() === 'todos') {
+    if (filtro.toLowerCase() === "todos") {
       const halfLimit = Math.floor(limit / 2);
       const remaining = limit - halfLimit;
 
-      // Consulta para consumo
       const queryConsumo = `
         ${buildBaseQuery("ta.clave NOT LIKE '%sistema%'")}
         ORDER BY a.fecha DESC
         LIMIT ${halfLimit} OFFSET ${offset}
       `;
 
-      // Consulta para sistema
       const querySistema = `
         ${buildBaseQuery("ta.clave LIKE '%sistema%'")}
         ORDER BY a.fecha DESC
@@ -133,10 +133,10 @@ class AlertModel {
 
       rows = [...rowsConsumo, ...rowsSistema];
     } else {
-      let condition = '';
-      if (filtro.toLowerCase() === 'consumo') {
+      let condition = "";
+      if (filtro.toLowerCase() === "consumo") {
         condition = "ta.clave NOT LIKE '%sistema%'";
-      } else if (filtro.toLowerCase() === 'sistema') {
+      } else if (filtro.toLowerCase() === "sistema") {
         condition = "ta.clave LIKE '%sistema%'";
       }
 
@@ -155,6 +155,40 @@ class AlertModel {
     throw new Error(`Error al obtener alertas: ${err.message}`);
   }
 }
+
+//Marcar alertas leidas
+static async marcarComoLeidas(usuarioId) {
+  try {
+    const query = `UPDATE alertas SET leida = 1 WHERE usuario_id = ? AND leida = 0`;
+    await db.execute(query, [usuarioId]);
+  } catch (err) {
+    throw new Error(`Error al marcar alertas como leídas: ${err.message}`);
+  }
+}
+
+//Para saber si hay alertas no leidas
+static async hayAlertasNoLeidas(usuarioId) {
+  try {
+    const query = `SELECT COUNT(*) AS total FROM alertas WHERE usuario_id = ? AND leida = 0`;
+    const [result] = await db.execute(query, [usuarioId]);
+    return result[0].total > 0;
+  } catch (err) {
+    throw new Error(`Error al verificar alertas no leídas: ${err.message}`);
+  }
+}
+
+//Marcar UNA SOLA alerta
+static async marcarUnaComoLeida(alertaId) {
+  try {
+    const query = `UPDATE alertas SET leida = 1 WHERE id = ?`;
+    await db.execute(query, [alertaId]);
+  } catch (err) {
+    throw new Error(`Error al marcar alerta como leída: ${err.message}`);
+  }
+}
+
+
+
 
   // Elimina una alerta si pertenece al usuario
   static async eliminar(id, usuarioId) {
