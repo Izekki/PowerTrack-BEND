@@ -22,6 +22,7 @@ import sensorRouter from './routes/sensorRouter.js';
 import electricalRouter  from './routes/ElectricalAnalysisRouter.js';
 import alertRouter from './routes/alertRouter.js';
 import savingsSettingsRouter from './routes/savingsSettingsRouter.js'
+import dashboardLayoutRouter from './routes/dashboardLayoutRouter.js';
 
 //import cookieParser from 'cookie-parser'
 
@@ -42,6 +43,7 @@ app.use(jsonErrorMiddleware);
 //app.use(authenticate);
 
 // Configuración de rutas
+app.use('/user/dashboard-config', dashboardLayoutRouter);
 app.use('/user', userRouter);
 app.use('/login', loginRouter);
 app.use('/device' ,deviceRouter);
@@ -52,7 +54,6 @@ app.use('/sensor',sensorRouter);
 app.use('/electrical_analysis', electricalRouter);
 app.use('/alertas',alertRouter);
 app.use('/savsetting',savingsSettingsRouter);
-
 
 // Ruta 404
 app.use((req, res) => {
