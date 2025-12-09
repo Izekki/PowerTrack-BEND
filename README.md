@@ -43,6 +43,45 @@ PowerTrack-BEND/
 ```
 ---
 
+## 🧪 Simulador de Mediciones
+
+Para pruebas y desarrollo, se incluye un simulador de mediciones eléctricas:
+
+```bash
+# Windows (Recomendado)
+simulate
+
+# Modo simple (sin BD)
+simulate simple AA:BB:CC:DD:EE:FF
+
+# Modo rápido (cada 2 segundos) - Ideal para frontend
+simulate fast
+
+# Ver ayuda
+simulate help
+```
+
+### 📊 Para Desarrollo con Frontend
+
+Si estás desarrollando gráficas en tiempo real:
+
+```bash
+# Terminal 1: Backend
+node app.js
+
+# Terminal 2: Simulador (envía datos cada 5s)
+simulate
+
+# Terminal 3: Tu frontend
+npm run dev
+```
+
+**Documentación:**
+- [Guía de Simulador](utils/README_SIMULATOR.md)
+- [Guía para Frontend (Gráficas)](utils/FRONTEND_GUIDE.md) ⭐
+
+---
+
 ## 👥 Autores
 
 - [@Izekki](https://github.com/Izekki)

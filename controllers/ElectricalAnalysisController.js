@@ -389,11 +389,21 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
 
   getConsumoPorDispositivosYGruposPorUsuarioConRango = async (req, res) => {
   const { id } = req.params;
+  
+  // 1. EXTRAER las fechas que envía el Frontend en la URL (?fechaInicio=...&fechaFin=...)
+  const { fechaInicio, fechaFin } = req.query; 
 
   try {
-    const datos = await this.electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuarioConRango(id);
+    // 2. PASAR las 3 variables al modelo (antes solo pasabas 'id')
+    const datos = await this.electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuarioConRango(
+      id, 
+      fechaInicio, 
+      fechaFin
+    );
+
     res.status(200).json(datos);
   } catch (error) {
+    console.error("Error en controller:", error); // Es bueno tener un log aquí
     res.status(500).json({
       mensaje: 'Error al obtener el consumo por dispositivos y grupos del usuario',
       error: error.message,
@@ -510,7 +520,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
     return res.status(500).json({ message: "Error al obtener resumen de consumo", error: error.message });
   }
   };
-
+/*
   getHistorialDetalladoPorRango = async (req, res) => {
     const { idUsuario } = req.params;
 
@@ -526,7 +536,31 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
       return res.status(500).json({ message: "Error al obtener historial detallado", error: error.message });
     }
   };
+*/
 
+getHistorialDetalladoPorRango = async (req, res) => {
+    const { idUsuario } = req.params;
+    
+    // 1. Recibir las fechas del Frontend
+    const { fechaInicio, fechaFin } = req.query;
+
+    if (!idUsuario) {
+      return res.status(400).json({ message: "Falta parámetro: idUsuario" });
+    }
+
+    try {
+      // 2. Pasarlas al modelo
+      const datos = await this.electricalAnalysisModel.getHistorialDetalladoPorRango(
+        idUsuario, 
+        fechaInicio, 
+        fechaFin
+      );
+      return res.status(200).json(datos);
+    } catch (error) {
+      console.error("Error en getHistorialDetalladoPorRango:", error);
+      return res.status(500).json({ message: "Error al obtener historial detallado", error: error.message });
+    }
+  };
 
 
 }
