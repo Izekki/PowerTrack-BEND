@@ -6,22 +6,17 @@ const CONFIG = {
   API_URL: 'http://localhost:5051/electrical_analysis/mediciones/guardar', 
   USUARIO_ID: 24,
   
-  // === CONFIGURACIÓN UNIFICADA ===
+  // === CONFIGURACIÓN ===
   
-  // FASE 1: RELLENO
-  HORAS_ATRAS_INICIO: 24, 
-  // ESTE ES EL VALOR CLAVE: Define la separación entre puntos (Historial Y Live)
-  PASO_TIEMPO_MINUTOS: 10, 
+  HORAS_HISTORIAL: 6,     // <--- CAMBIO: Solo 6 horas hacia atrás
+  PASO_TIEMPO_MINUTOS: 5, // Diferencia de tiempo entre cada dato (timestamp)
+  INTERVALO_ENVIO_REAL_MS: 5000, // Cada cuánto tiempo REAL se envían datos en LIVE
 
-  // FASE 2: VELOCIDAD VISUAL
-  // Cada cuánto tiempo REAL vemos aparecer un nuevo punto en la gráfica
-  INTERVALO_ENVIO_REAL_MS: 5000, // Cada 5 segundos reales (ajusta a tu gusto)
-
-  // Variables Eléctricas
-  VOLTAJE_BASE: 120, VOLTAJE_VAR: 5,
-  CORRIENTE_BASE: 2, CORRIENTE_VAR: 1,
-  FACTOR_POT_MIN: 0.90, FACTOR_POT_MAX: 0.99,
-  FRECUENCIA_BASE: 60, FRECUENCIA_VAR: 0.1,
+  // Variables Eléctricas (alineadas al payload real: V~126, I~2, P~260)
+  VOLTAJE_BASE: 126, VOLTAJE_VAR: 2,     // 124-128
+  CORRIENTE_BASE: 2.0, CORRIENTE_VAR: 0.2, // 1.8-2.2
+  FACTOR_POT_MIN: 0.92, FACTOR_POT_MAX: 0.98,
+  FRECUENCIA_BASE: 60, FRECUENCIA_VAR: 0.02,
 };
 
 const pool = mysql.createPool({
@@ -43,9 +38,8 @@ async function getSensoresUsuario24() {
   return rows;
 }
 
-// Limpieza para evitar conflictos o datos dobles
 async function limpiarDatosUsuario() {
-  console.log('🧹 Limpiando mediciones...');
+  console.log('🧹 Limpiando mediciones previas para iniciar limpio...');
   await pool.query(`
     DELETE m FROM mediciones m 
     INNER JOIN sensores s ON m.sensor_id = s.id 
@@ -62,75 +56,68 @@ function generarMedicion(fecha, intervaloEnHoras) {
   const energia = (potencia * intervaloEnHoras) / 1000;
 
   return {
-    voltaje: parseFloat(voltaje.toFixed(2)),
-    corriente: parseFloat(corriente.toFixed(2)),
-    potencia: parseFloat(potencia.toFixed(2)),
+    voltaje: Math.round(voltaje),                // Ej: 126
+    corriente: parseFloat(corriente.toFixed(2)), // Ej: 2.00
+    potencia: Math.round(potencia),              // Ej: 260
     factor_potencia: parseFloat(fp.toFixed(2)),
     energia: parseFloat(energia.toFixed(6)),
-    frecuencia: parseFloat((CONFIG.FRECUENCIA_BASE + Math.random() * 0.1).toFixed(2)),
+    frecuencia: parseFloat((CONFIG.FRECUENCIA_BASE + (Math.random() * 2 - 1) * CONFIG.FRECUENCIA_VAR).toFixed(2)),
     timestamp: fecha.toISOString()
   };
 }
 
 async function enviarMedicion(mac, medicion, nombre) {
   try {
+    // Enviar MAC tal cual en DB (con dos puntos)
     await axios.post(CONFIG.API_URL, { mac_address: mac, ...medicion }, { timeout: 5000 });
-    return { success: true, dev: nombre, w: medicion.potencia, t: medicion.timestamp };
+    const timeStr = new Date(medicion.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    return { success: true, dev: nombre, w: medicion.potencia, t: timeStr };
   } catch (error) {
     return { success: false, dev: nombre, err: error.message };
   }
 }
 
 async function iniciarSimulacion() {
-  console.log('⚡ SIMULADOR CONSISTENTE - USUARIO ' + CONFIG.USUARIO_ID);
+  console.log(`⚡ SIMULADOR: -${CONFIG.HORAS_HISTORIAL} HORAS -> AHORA -> LIVE (+5min)`);
   
   try {
     await limpiarDatosUsuario();
     const sensores = await getSensoresUsuario24();
     console.log(`📡 Dispositivos encontrados: ${sensores.length}`);
 
-    // --- FASE 1: RELLENO HISTÓRICO ---
-    console.log('\n📚 FASE 1: Rellenando historial...');
-    
-    // Inicia 24h atrás
-    let relojSimulado = new Date(Date.now() - (CONFIG.HORAS_ATRAS_INICIO * 60 * 60 * 1000));
     const ahoraReal = new Date();
     
-    // Límite: Fin del día actual
-    const finDelDia = new Date(ahoraReal);
-    finDelDia.setHours(23, 59, 59, 999); 
+    const offsetMinutos = CONFIG.PASO_TIEMPO_MINUTOS; // Detenemos 5 min antes
+    const limiteHistorial = new Date(ahoraReal.getTime() - (offsetMinutos * 60 * 1000));
+    
+    // --- CALCULO DEL INICIO (6 HORAS ATRÁS) ---
+    let relojSimulado = new Date(ahoraReal.getTime() - (CONFIG.HORAS_HISTORIAL * 60 * 60 * 1000));
 
     const horasPorPaso = CONFIG.PASO_TIEMPO_MINUTOS / 60;
 
-    // Rellenamos hasta alcanzar la hora actual
-    while (relojSimulado < ahoraReal) {
+    // --- FASE 1: RELLENO (Desde hace 6 horas hasta hace 5 minutos) ---
+    console.log(`\n📚 FASE 1: Rellenando historial desde ${relojSimulado.toLocaleTimeString()} hasta ${limiteHistorial.toLocaleTimeString()}...`);
+    
+    while (relojSimulado < limiteHistorial) {
       const promesas = sensores.map(s => 
         enviarMedicion(s.mac_address, generarMedicion(relojSimulado, horasPorPaso), s.dispositivo_nombre)
       );
       await Promise.all(promesas);
       
       relojSimulado = new Date(relojSimulado.getTime() + (CONFIG.PASO_TIEMPO_MINUTOS * 60000));
-      process.stdout.write('.');
+      process.stdout.write('.'); 
     }
-    console.log(`\n✅ Historial al día. Último dato: ${relojSimulado.toLocaleTimeString()}`);
+    
+    console.log(`\n✅ Historial completado al día.`);
 
-    // --- FASE 2: MODO EN VIVO (CONTINUO) ---
-    console.log('\n🔴 FASE 2: Iniciando LIVE (Consistente)');
-    console.log(`   - Cada ${CONFIG.INTERVALO_ENVIO_REAL_MS/1000}s reales, avanza ${CONFIG.PASO_TIEMPO_MINUTOS} minutos.`);
+    // --- FASE 2: LIVE (Cada 5s avanza 5min) ---
+    console.log('\n🔴 FASE 2: LIVE ACTIVO');
+    console.log(`   - Simulando avance de 5 minutos cada 5 segundos reales.`);
     console.log('='.repeat(60));
 
-    const intervaloID = setInterval(async () => {
-      
-      // AVANZAMOS EL MISMO INTERVALO QUE EN EL HISTORIAL (10 MINUTOS)
-      // Esto elimina el "salto raro" o inconsistencia
+    setInterval(async () => {
+      // Avanzar reloj simulado
       relojSimulado = new Date(relojSimulado.getTime() + (CONFIG.PASO_TIEMPO_MINUTOS * 60000));
-      
-      if (relojSimulado > finDelDia) {
-        console.log(`\n🏁 FIN DEL DÍA (${relojSimulado.toLocaleTimeString()}).`);
-        clearInterval(intervaloID);
-        process.exit(0);
-        return;
-      }
 
       console.log(`\n⏱️  LIVE | Simulando: ${relojSimulado.toLocaleTimeString()}`);
 
@@ -139,8 +126,10 @@ async function iniciarSimulacion() {
       );
 
       const resultados = await Promise.all(promesas);
+      
       resultados.forEach(r => {
-        if(r.success) console.log(`   ✅ ${r.dev}: ${r.w} W`);
+        if(r.success) console.log(`   ✅ ${r.dev} \t| ${r.w} W \t| ${r.t}`);
+        else console.log(`   ❌ ${r.dev} Error: ${r.err}`);
       });
 
     }, CONFIG.INTERVALO_ENVIO_REAL_MS);

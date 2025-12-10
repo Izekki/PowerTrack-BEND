@@ -1115,16 +1115,15 @@ async getHistorialDetalladoPorRango(idUsuario) {
   });
 }*/
 
-async getHistorialDetalladoPorRango(idUsuario, fechaInicioArg, fechaFinArg) {
-    const [dispositivos] = await db.query(`
-      SELECT d.id AS dispositivo_id
-      FROM dispositivos d
-      WHERE d.usuario_id = ?
-    `, [idUsuario]);
+  async getHistorialDetalladoPorRango(idUsuario, fechaInicioArg, fechaFinArg) {
+    const [dispositivos] = await db.query(
+      `SELECT d.id AS dispositivo_id FROM dispositivos d WHERE d.usuario_id = ?`,
+      [idUsuario]
+    );
 
     if (!dispositivos.length) return [];
 
-    const idDispositivos = dispositivos.map(d => d.dispositivo_id);
+    const idDispositivos = dispositivos.map((d) => d.dispositivo_id);
     const placeholders = idDispositivos.map(() => '?').join(',');
 
     const rangos = [];
@@ -1133,15 +1132,25 @@ async getHistorialDetalladoPorRango(idUsuario, fechaInicioArg, fechaFinArg) {
 
     // --- RANGO 'DIA' / ZOOM DINÁMICO ---
     {
-      let fechaInicio, fechaFinal;
+      let fechaInicio;
+      let fechaFinal;
       let formatoAgrupacion;
-      
-      // Si el frontend envía fechas (Modo Zoom), las usamos
+
       if (fechaInicioArg && fechaFinArg) {
         fechaInicio = fechaInicioArg;
-        fechaFinal = fechaFinArg;
-        // ¡TRUCO VISUAL! Agrupamos por HORA:MINUTO para ver detalle fino
-        formatoAgrupacion = "%H:%i"; 
+        formatoAgrupacion = '%Y-%m-%d %H:%i'; // group by minute for zoom
+
+        // Use the latest measurement within the requested window as the real end
+        const [[ultima]] = await db.query(
+          `SELECT MAX(m.fecha_hora) AS ultima_fecha
+           FROM mediciones m
+           INNER JOIN sensores s ON m.sensor_id = s.id
+           INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+           WHERE d.id IN (${placeholders})
+             AND m.fecha_hora BETWEEN ? AND ?`,
+          [...idDispositivos, fechaInicioArg, fechaFinArg]
+        );
+        fechaFinal = ultima?.ultima_fecha || fechaFinArg;
       } else {
         // Lógica por defecto (Todo el día actual)
         const inicio = new Date(now);
@@ -1149,32 +1158,30 @@ async getHistorialDetalladoPorRango(idUsuario, fechaInicioArg, fechaFinArg) {
         fechaInicio = `${inicio.getFullYear()}-${pad(inicio.getMonth() + 1)}-${pad(inicio.getDate())} 00:00:00`;
         fechaFinal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
         // Agrupación por defecto (Hora)
-        formatoAgrupacion = "%H"; 
+        formatoAgrupacion = "%H";
       }
 
-      // Consulta SQL dinámica
-      // Usamos DATE_FORMAT con la variable 'formatoAgrupacion' para decidir si agrupar por Hora o Minuto
-      const [rows] = await db.query(`
-        SELECT 
-          DATE_FORMAT(m.fecha_hora, '${formatoAgrupacion}') AS etiqueta,
-          AVG((m.potencia / 1000) * 5 / 60) AS promedio
-        FROM mediciones m
-        INNER JOIN sensores s ON m.sensor_id = s.id
-        INNER JOIN dispositivos d ON s.dispositivo_id = d.id
-        WHERE d.id IN (${placeholders})
-          AND m.fecha_hora BETWEEN ? AND ?
-        GROUP BY etiqueta
-        ORDER BY etiqueta ASC
-      `, [...idDispositivos, fechaInicio, fechaFinal]);
+            const [rows] = await db.query(
+        `SELECT 
+           DATE_FORMAT(m.fecha_hora, '${formatoAgrupacion}') AS etiqueta,
+           MIN(m.fecha_hora) AS fechaOrden,
+           AVG((m.potencia / 1000) * 5 / 60) AS promedio
+         FROM mediciones m
+         INNER JOIN sensores s ON m.sensor_id = s.id
+         INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+         WHERE d.id IN (${placeholders})
+           AND m.fecha_hora BETWEEN ? AND ?
+         GROUP BY etiqueta
+         ORDER BY fechaOrden ASC`,
+        [...idDispositivos, fechaInicio, fechaFinal]
+      );
 
       rangos.push({
         rango: 'dia',
-        detalles: rows.map(r => ({
-          // Si la etiqueta ya trae minutos (ej: "10:05"), la dejamos así. 
-          // Si solo trae hora (ej: "10"), le agregamos ":00"
-          etiqueta: r.etiqueta.includes(':') ? r.etiqueta : `${r.etiqueta}:00`,
-          promedio: parseFloat(Number(r.promedio).toFixed(3))
-        }))
+        detalles: rows.map((r) => ({
+          etiqueta: formatoAgrupacion.includes('%i') ? r.etiqueta : `${r.etiqueta}:00`,
+          promedio: parseFloat(Number(r.promedio).toFixed(3)),
+        })),
       });
     }
 
