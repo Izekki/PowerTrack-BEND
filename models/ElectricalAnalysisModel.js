@@ -599,7 +599,7 @@ getConsumoPorRango = async (idSensor, fechaInicio, fechaFin) => {
     throw error;
   }
 };
-
+/*
 getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaInicio, fechaFin) => {
   try {
     console.log("Usuario recibido:", id_usuario);
@@ -793,7 +793,202 @@ getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaIni
     throw error;
   }
 };
+*/
 
+getConsumoPorDispositivosYGruposPorUsuarioConRango = async (id_usuario, fechaInicio, fechaFin) => {
+  try {
+    console.log("Usuario recibido:", id_usuario);
+
+    // Obtener tarifas CFE
+    const [filasProveedor] = await db.query(
+      `SELECT nombre, cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo
+       FROM proveedores
+       WHERE nombre = 'CFE'
+       LIMIT 1`
+    );
+    if (!filasProveedor.length) throw new Error("No se encontró información del proveedor CFE.");
+    const proveedor = filasProveedor[0];
+    const cargo_variable = parseFloat(proveedor.cargo_variable || 0);
+    const cargo_capacidad = parseFloat(proveedor.cargo_capacidad || 0);
+    const cargo_distribucion = parseFloat(proveedor.cargo_distribucion || 0);
+    const cargo_fijo = parseFloat(proveedor.cargo_fijo || 0);
+
+    // Obtener dispositivos del usuario
+    const [dispositivos] = await db.query(
+      `SELECT id AS dispositivoId, nombre, id_grupo AS grupoId, id_sensor AS sensorId
+       FROM dispositivos
+       WHERE usuario_id = ?`,
+      [id_usuario]
+    );
+
+    console.log(`Dispositivos encontrados: ${dispositivos.length}`);
+    if (!dispositivos.length) return { mensaje: "No hay dispositivos para este usuario" };
+
+    // Obtener nombres de grupos
+    const [filasGrupos] = await db.query(
+      `SELECT id, nombre FROM grupos WHERE id IN (?)`,
+      [dispositivos.map(d => d.grupoId).filter(id => id !== null)]
+    );
+
+    const mapaNombreGrupo = filasGrupos.reduce((map, g) => {
+      map[g.id] = g.nombre;
+      return map;
+    }, {});
+
+    const segundosPorMedicion = 10; // 10 segundos
+    const minutosPorMedicion = segundosPorMedicion / 60; // 0.1667 minutos
+    const horasPorMedicion = minutosPorMedicion / 60; // 0.00278 horas
+    const medicionesPorDia = (24 * 60 * 60) / segundosPorMedicion; // 8640 mediciones/día
+    const diasPorMes = 30;
+    const medicionesPorMes = medicionesPorDia * diasPorMes;
+    const factorCarga = 0.9;
+
+    // 👇 Ajustamos la fechaFinReal al último dato disponible
+    const [ultimaMedicion] = await db.query(`
+      SELECT MAX(m.fecha_hora) AS ultima_fecha
+      FROM mediciones m
+      INNER JOIN sensores s ON m.sensor_id = s.id
+      INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+      WHERE d.usuario_id = ?
+        AND m.fecha_hora BETWEEN ? AND ?
+    `, [id_usuario, fechaInicio, fechaFin]);
+
+    const fechaFinReal = ultimaMedicion[0]?.ultima_fecha || fechaFin;
+    console.log("Fecha fin real detectada:", fechaFinReal);
+
+    let resultados = [];
+    let grupos = {};
+    let consumoPorDia = {}; // Aquí guardamos el desglose diario
+
+    for (const dispositivo of dispositivos) {
+      console.log(`Procesando dispositivo ID: ${dispositivo.dispositivoId}, sensor ID: ${dispositivo.sensorId}`);
+
+      // === Calcular promedio diario con fechas reales ===
+      const [consumoDiarioRows] = await db.query(
+        `SELECT DATE(fecha_hora) AS fecha, AVG(potencia) AS promedio_potencia
+         FROM mediciones
+         WHERE sensor_id = ? AND fecha_hora BETWEEN ? AND ?
+         GROUP BY DATE(fecha_hora)`,
+        [dispositivo.sensorId, fechaInicio, fechaFinReal]
+      );
+
+      consumoDiarioRows.forEach(row => {
+        const fecha = row.fecha;
+        const potenciaPromedio = parseFloat(row.promedio_potencia) || 0;
+        const consumoDiaKWh = (potenciaPromedio / 1000) * 24; // promedio * 24h
+
+        if (!consumoPorDia[fecha]) consumoPorDia[fecha] = 0;
+        consumoPorDia[fecha] += consumoDiaKWh;
+      });
+
+      // === Calcular resumen mensual general (modelo original) ===
+      let potenciaW = 0;
+      let fecha_hora = null;
+
+      if (fechaInicio && fechaFinReal) {
+        const [promedioRow] = await db.query(
+          `SELECT AVG(potencia) AS promedio_potencia
+           FROM mediciones
+           WHERE sensor_id = ? AND fecha_hora BETWEEN ? AND ?`,
+          [dispositivo.sensorId, fechaInicio, fechaFinReal]
+        );
+        potenciaW = parseFloat(promedioRow[0]?.promedio_potencia) || 0;
+        fecha_hora = `${fechaInicio} a ${fechaFinReal}`;
+      } else {
+        const [filasMedicion] = await db.query(
+          `SELECT potencia AS valor, fecha_hora
+           FROM mediciones
+           WHERE sensor_id = ?
+           ORDER BY fecha_hora DESC
+           LIMIT 1`,
+          [dispositivo.sensorId]
+        );
+        if (filasMedicion.length) {
+          potenciaW = parseFloat(filasMedicion[0].valor);
+          fecha_hora = filasMedicion[0].fecha_hora;
+        }
+      }
+
+      const consumoMedicionKWh = (potenciaW / 1000) * horasPorMedicion;
+      const consumoMensualKWh = consumoMedicionKWh * medicionesPorMes;
+      const demandaKW = consumoMensualKWh / (24 * diasPorMes * factorCarga);
+
+      const costoConsumo = consumoMensualKWh * cargo_variable;
+      const costoCapacidad = demandaKW * cargo_capacidad;
+      const costoDistribucion = demandaKW * cargo_distribucion;
+      const costoFijo = cargo_fijo;
+      const costoMensualTotal = costoConsumo + costoCapacidad + costoDistribucion + costoFijo;
+
+      const costoPorMedicion = costoMensualTotal / medicionesPorMes;
+      const estimacionCostoDiario = costoPorMedicion * medicionesPorDia;
+      const estimacionConsumoDiarioKWh = consumoMedicionKWh * medicionesPorDia;
+
+      const resultado = {
+        dispositivo_id: dispositivo.dispositivoId,
+        nombre: dispositivo.nombre,
+        grupo_id: dispositivo.grupoId,
+        sensor_id: dispositivo.sensorId,
+        fechaMedicion: fecha_hora,
+        potenciaW,
+        consumoActualKWh: consumoMedicionKWh,
+        consumoDiarioKWh: estimacionConsumoDiarioKWh,
+        consumoMensualKWh,
+        costoPorMedicionMXN: costoPorMedicion.toFixed(2),
+        costoDiarioMXN: estimacionCostoDiario.toFixed(2),
+        costoMensualMXN: costoMensualTotal.toFixed(2),
+        unidad: "kWh",
+        detalleTarifas: { cargo_variable, cargo_capacidad, cargo_distribucion, cargo_fijo },
+        detalleCostos: { consumo: costoConsumo, capacidad: costoCapacidad, distribucion: costoDistribucion, fijo: costoFijo }
+      };
+
+      resultados.push(resultado);
+
+      const grupoKey = dispositivo.grupoId ?? 'sin_grupo';
+
+      if (!grupos[grupoKey]) {
+        grupos[grupoKey] = {
+          grupo_id: dispositivo.grupoId,
+          nombre: mapaNombreGrupo[dispositivo.grupoId] || "Sin Grupo",
+          dispositivos: [],
+          consumoTotalKWh: 0,
+          costoTotalMXN: 0,
+          consumoDiarioTotalKWh: 0,
+          costoDiarioTotalMXN: 0,
+          consumoMensualTotalKWh: 0,
+          costoMensualTotalMXN: 0,
+        };
+      }
+
+      grupos[grupoKey].dispositivos.push(resultado);
+      grupos[grupoKey].consumoTotalKWh += consumoMedicionKWh;
+      grupos[grupoKey].costoTotalMXN += parseFloat(costoPorMedicion.toFixed(2));
+      grupos[grupoKey].consumoDiarioTotalKWh += estimacionConsumoDiarioKWh;
+      grupos[grupoKey].costoDiarioTotalMXN += parseFloat(estimacionCostoDiario.toFixed(2));
+      grupos[grupoKey].consumoMensualTotalKWh += consumoMensualKWh;
+      grupos[grupoKey].costoMensualTotalMXN += parseFloat(costoMensualTotal.toFixed(2));
+    }
+
+    const consumoPorDiaArray = Object.entries(consumoPorDia).map(
+      ([fecha, consumo]) => ({
+        fecha,
+        consumoKWh: consumo,
+      })
+    );
+
+    return {
+      resumenDispositivos: resultados,
+      resumenGrupos: Object.values(grupos),
+      consumoPorDia: consumoPorDiaArray,
+      fechaInicio,
+      fechaFinSolicitada: fechaFin,
+      fechaFinReal
+    };
+
+  } catch (error) {
+    console.error("Error en getConsumoPorDispositivosYGruposPorUsuarioConRango:", error);
+    throw error;
+  }
+};
 
 
 
@@ -871,7 +1066,7 @@ const promedio = parseOrZero(resultado.promedio);
 
   return resultados;
 }
-
+/*
 async getHistorialDetalladoPorRango(idUsuario) {
   const [dispositivos] = await db.query(`
     SELECT d.id AS dispositivo_id
@@ -918,7 +1113,77 @@ async getHistorialDetalladoPorRango(idUsuario) {
       promedio: parseFloat(Number(r.promedio).toFixed(3))
     }))
   });
-}
+}*/
+
+  async getHistorialDetalladoPorRango(idUsuario, fechaInicioArg, fechaFinArg) {
+    const [dispositivos] = await db.query(
+      `SELECT d.id AS dispositivo_id FROM dispositivos d WHERE d.usuario_id = ?`,
+      [idUsuario]
+    );
+
+    if (!dispositivos.length) return [];
+
+    const idDispositivos = dispositivos.map((d) => d.dispositivo_id);
+    const placeholders = idDispositivos.map(() => '?').join(',');
+
+    const rangos = [];
+    const now = new Date();
+    const pad = (n) => n.toString().padStart(2, '0');
+
+    // --- RANGO 'DIA' / ZOOM DINÁMICO ---
+    {
+      let fechaInicio;
+      let fechaFinal;
+      let formatoAgrupacion;
+
+      if (fechaInicioArg && fechaFinArg) {
+        fechaInicio = fechaInicioArg;
+        formatoAgrupacion = '%Y-%m-%d %H:%i'; // group by minute for zoom
+
+        // Use the latest measurement within the requested window as the real end
+        const [[ultima]] = await db.query(
+          `SELECT MAX(m.fecha_hora) AS ultima_fecha
+           FROM mediciones m
+           INNER JOIN sensores s ON m.sensor_id = s.id
+           INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+           WHERE d.id IN (${placeholders})
+             AND m.fecha_hora BETWEEN ? AND ?`,
+          [...idDispositivos, fechaInicioArg, fechaFinArg]
+        );
+        fechaFinal = ultima?.ultima_fecha || fechaFinArg;
+      } else {
+        // Lógica por defecto (Todo el día actual)
+        const inicio = new Date(now);
+        inicio.setHours(0, 0, 0, 0);
+        fechaInicio = `${inicio.getFullYear()}-${pad(inicio.getMonth() + 1)}-${pad(inicio.getDate())} 00:00:00`;
+        fechaFinal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        // Agrupación por defecto (Hora)
+        formatoAgrupacion = "%H";
+      }
+
+            const [rows] = await db.query(
+        `SELECT 
+           DATE_FORMAT(m.fecha_hora, '${formatoAgrupacion}') AS etiqueta,
+           MIN(m.fecha_hora) AS fechaOrden,
+           AVG((m.potencia / 1000) * 5 / 60) AS promedio
+         FROM mediciones m
+         INNER JOIN sensores s ON m.sensor_id = s.id
+         INNER JOIN dispositivos d ON s.dispositivo_id = d.id
+         WHERE d.id IN (${placeholders})
+           AND m.fecha_hora BETWEEN ? AND ?
+         GROUP BY etiqueta
+         ORDER BY fechaOrden ASC`,
+        [...idDispositivos, fechaInicio, fechaFinal]
+      );
+
+      rangos.push({
+        rango: 'dia',
+        detalles: rows.map((r) => ({
+          etiqueta: formatoAgrupacion.includes('%i') ? r.etiqueta : `${r.etiqueta}:00`,
+          promedio: parseFloat(Number(r.promedio).toFixed(3)),
+        })),
+      });
+    }
 
 
   {
