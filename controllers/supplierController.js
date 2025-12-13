@@ -24,14 +24,16 @@ export const getSupplier = async (req, res) => {
 };
 
 export const registerSupplier = async (req, res) => {
-    const { nombre, tarifas } = req.body;
+    const { nombre, cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, region, demanda_minima, factor_carga } = req.body;
 
     if (!nombre) {
         return res.status(400).json({ message: "Nombre requerido" });
     }
 
     try {
-        const newSupplier = await SupplierModel.createSupplier({ input: { nombre, tarifas } });
+        const newSupplier = await SupplierModel.createSupplier({ input: {
+            nombre, cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, region, demanda_minima, factor_carga
+        } });
         res.status(201).json({ message: "Proveedor creado exitosamente", supplier: newSupplier });
     } catch (error) {
         res.status(500).json({ message: 'Error al registrar el proveedor', error: error.message });

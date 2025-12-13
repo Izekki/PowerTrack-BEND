@@ -1,0 +1,205 @@
+// Prisma schema generado a partir del estado actual del código (MySQL)
+// Asegúrate de tener en tu .env la variable DATABASE_URL para Prisma, por ejemplo:
+// DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/DB_NAME"
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Proveedor {
+  id               Int       @id @default(autoincrement())
+  nombre           String    @unique
+  cargo_fijo       Decimal?  @db.Decimal(10, 2)
+  cargo_variable   Decimal?  @db.Decimal(10, 4)
+  cargo_distribucion Decimal? @db.Decimal(10, 4)
+  cargo_capacidad  Decimal?  @db.Decimal(10, 4)
+  region           String?
+  demanda_minima   Decimal?  @db.Decimal(10, 2)
+  factor_carga     Decimal?  @db.Decimal(6, 4)
+
+  usuarios Usuario[]
+
+  @@map("proveedores")
+}
+
+model Usuario {
+  id            Int         @id @default(autoincrement())
+  nombre        String
+  correo        String      @unique
+  contrasena    String      @map("contraseña")
+  id_proveedor  Int?
+  fecha_registro DateTime   @default(now())
+
+  proveedor   Proveedor? @relation(fields: [id_proveedor], references: [id])
+  dispositivos Dispositivo[]
+  grupos       Grupo[]
+  sensores     Sensor[]
+  alertas      Alerta[]
+  configs      ConfiguracionAhorro[]
+  recuperaciones RecuperacionPassword[]
+
+  @@map("usuarios")
+}
+
+model Grupo {
+  id         Int          @id @default(autoincrement())
+  nombre     String
+  usuario_id Int
+
+  usuario    Usuario      @relation(fields: [usuario_id], references: [id])
+  dispositivos Dispositivo[]
+  dispositivosAgrupados DispositivoAgrupado[]
+
+  @@index([usuario_id])
+  @@map("grupos")
+}
+
+model TipoDispositivo {
+  id               Int          @id @default(autoincrement())
+  nombre           String
+  consumo_minimo_w Int?
+  consumo_maximo_w Int?
+
+  dispositivos Dispositivo[]
+  alertas      Alerta[]
+
+  @@map("tipos_dispositivos")
+}
+
+model Dispositivo {
+  id                  Int       @id @default(autoincrement())
+  nombre              String
+  ubicacion           String?
+  usuario_id          Int
+  id_grupo            Int?
+  id_tipo_dispositivo Int?
+
+  usuario       Usuario         @relation(fields: [usuario_id], references: [id])
+  grupo         Grupo?          @relation(fields: [id_grupo], references: [id])
+  tipo          TipoDispositivo? @relation(fields: [id_tipo_dispositivo], references: [id])
+  sensor        Sensor?         @relation("DispositivoSensor")
+  alertas       Alerta[]
+  configs       ConfiguracionAhorro[]
+  dispositivosAgrupados DispositivoAgrupado[]
+
+  @@index([usuario_id])
+  @@index([id_grupo])
+  @@index([id_tipo_dispositivo])
+  @@map("dispositivos")
+}
+
+model Sensor {
+  id             Int       @id @default(autoincrement())
+  mac_address    String
+  tipo           String?
+  asignado       Boolean   @default(false)
+  usuario_id     Int
+  dispositivo_id Int?
+
+  usuario     Usuario   @relation(fields: [usuario_id], references: [id])
+  dispositivo Dispositivo? @relation("DispositivoSensor", fields: [dispositivo_id], references: [id])
+  mediciones  Medicion[]
+
+  @@unique([mac_address])
+  @@unique([dispositivo_id])
+  @@index([usuario_id])
+  @@index([dispositivo_id])
+  @@map("sensores")
+}
+
+model Medicion {
+  id              Int       @id @default(autoincrement())
+  sensor_id       Int
+  voltaje         Float?
+  corriente       Float?
+  potencia        Float?
+  factor_potencia Float?
+  energia         Float?
+  frecuencia      Float?
+  fecha_hora      DateTime
+
+  sensor     Sensor     @relation(fields: [sensor_id], references: [id])
+
+  @@index([sensor_id])
+  @@map("mediciones")
+}
+
+model TipoAlerta {
+  id         Int      @id @default(autoincrement())
+  clave      String
+  nombre     String
+  icono_svg  String?
+
+  alertas Alerta[]
+
+  @@map("tipos_alerta")
+}
+
+model Alerta {
+  id                  Int       @id @default(autoincrement())
+  usuario_id          Int
+  dispositivo_id      Int?
+  mensaje             String
+  nivel               String
+  id_tipo_dispositivo Int?
+  tipo_alerta_id      Int?
+  fecha               DateTime  @default(now())
+  leida               Boolean   @default(false)
+
+  usuario     Usuario         @relation(fields: [usuario_id], references: [id])
+  dispositivo Dispositivo?    @relation(fields: [dispositivo_id], references: [id])
+  tipo        TipoDispositivo? @relation(fields: [id_tipo_dispositivo], references: [id])
+  tipoAlerta  TipoAlerta?     @relation(fields: [tipo_alerta_id], references: [id])
+
+  @@index([usuario_id])
+  @@index([dispositivo_id])
+  @@index([id_tipo_dispositivo])
+  @@index([tipo_alerta_id])
+  @@map("alertas")
+}
+
+model ConfiguracionAhorro {
+  id            Int       @id @default(autoincrement())
+  usuario_id    Int
+  dispositivo_id Int
+  minimo        Float?
+  maximo        Float?
+  clave_alerta  String?
+  mensaje       String?
+
+  usuario     Usuario     @relation(fields: [usuario_id], references: [id])
+  dispositivo Dispositivo @relation(fields: [dispositivo_id], references: [id])
+
+  @@index([usuario_id])
+  @@index([dispositivo_id])
+  @@map("configuracion_ahorro")
+}
+
+model DispositivoAgrupado {
+  grupo_id      Int
+  dispositivo_id Int
+
+  grupo       Grupo       @relation(fields: [grupo_id], references: [id])
+  dispositivo Dispositivo @relation(fields: [dispositivo_id], references: [id])
+
+  @@id([grupo_id, dispositivo_id])
+  @@index([dispositivo_id])
+  @@map("dispositivos_agrupados")
+}
+
+model RecuperacionPassword {
+  id               Int      @id @default(autoincrement())
+  usuario_id       Int
+  token            String   @unique
+  fecha_expiracion DateTime
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id])
+
+  @@index([usuario_id])
+  @@map("recuperacion_passwords")
+}

@@ -5,14 +5,28 @@ import DBElementAlredyExists from './modelserror/DBElementAlredyExists.js';
 export class SupplierModel {
 
     static async createSupplier({ input }) {
-        const { nombre, tarifas } = input;
+        const { nombre, cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, region, demanda_minima, factor_carga } = input;
+
+        // Detectar y registrar (log) las partes del input no utilizadas
+        const knownKeys = ['nombre', 'cargo_fijo', 'cargo_variable', 'cargo_distribucion', 'cargo_capacidad', 'region', 'demanda_minima', 'factor_carga'];
+        const unusedInput = Object.fromEntries(
+            Object.entries(input || {}).filter(([key]) => !knownKeys.includes(key))
+        );
+        if (Object.keys(unusedInput).length > 0) {
+            // Se registra como advertencia para seguimiento en logs
+            console.warn('createSupplier: campos no usados en input:', unusedInput);
+        }
 
         // Verificar si el proveedor ya existe
         let existingSupplier = null;
         let nombreLower = nombre.toLowerCase();
 
         try {
-            [existingSupplier] = await db.query(`SELECT proveedores FROM suppliers WHERE LOWER(nombre) = ?`, [nombreLower]);
+            // Buscar en la tabla correcta y retornando un identificador
+            [existingSupplier] = await db.query(
+                `SELECT id FROM proveedores WHERE LOWER(nombre) = ?`,
+                [nombreLower]
+            );
         } catch (error) {
             console.log(error.message);
             throw new DBConnectionError('Ocurrió un error al verificar si el proveedor');
@@ -23,9 +37,18 @@ export class SupplierModel {
         // Insertar nuevo proveedor
         try {
             await db.query(
-                `INSERT INTO proveedores (nombre, tarifas)
-                 VALUES (?, ?)`,
-                [nombre, tarifas]
+                `INSERT INTO proveedores (nombre, cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, region, demanda_minima, factor_carga)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    nombre ?? null,
+                    cargo_fijo ?? null,
+                    cargo_variable ?? null,
+                    cargo_distribucion ?? null,
+                    cargo_capacidad ?? null,
+                    region ?? null,
+                    demanda_minima ?? null,
+                    factor_carga ?? null
+                ]
             );
         } catch (error) {
             console.log(error.message);
@@ -37,7 +60,7 @@ export class SupplierModel {
 
         try {
             [supplier] = await db.query(
-                `SELECT id, nombre, tarifas
+                `SELECT id, nombre, cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, region, demanda_minima, factor_carga
                  FROM proveedores WHERE nombre = ?`,
                 [nombre]
             );
