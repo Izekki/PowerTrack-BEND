@@ -1,0 +1,227 @@
+// Prisma schema generado a partir del estado actual del código (MySQL)
+// Asegúrate de tener en tu .env la variable DATABASE_URL para Prisma, por ejemplo:
+// DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/DB_NAME"
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Proveedor {
+  id                 Int       @id @default(autoincrement())
+  nombre             String    @db.VarChar(100)
+  cargo_fijo         Decimal   @db.Decimal(10, 2)
+  cargo_variable     Decimal   @db.Decimal(10, 2)
+  cargo_distribucion Decimal   @db.Decimal(10, 2)
+  cargo_capacidad    Decimal   @db.Decimal(10, 2)
+  region             String?   @db.VarChar(100)
+  demanda_minima     Decimal   @db.Decimal(10, 2)
+  factor_carga       Decimal   @db.Decimal(10, 2)
+
+  usuarios Usuario[]
+
+  @@map("proveedores")
+}
+
+model Usuario {
+  id             Int                   @id @default(autoincrement())
+  nombre         String                @db.VarChar(100)
+  correo         String                @unique @db.VarChar(100)
+  contrasena     String                @map("contraseña") @db.VarChar(255)
+  id_proveedor   Int?
+  fecha_registro DateTime              @default(now()) @db.Timestamp(0)
+  proveedor      Proveedor?            @relation(fields: [id_proveedor], references: [id], onUpdate: NoAction)
+  dispositivos   Dispositivo[]
+  grupos         Grupo[]
+  sensores       Sensor[]
+  alertas        Alerta[]
+  configs        ConfiguracionAhorro[]
+  recuperaciones RecuperacionPassword[]
+  reportes       Reporte[]
+
+  @@index([id_proveedor], map: "id_proveedor")
+  @@map("usuarios")
+}
+
+model Grupo {
+  id         Int       @id @default(autoincrement())
+  usuario_id Int
+  nombre     String    @db.VarChar(100)
+  usuario    Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_grupos_usuario")
+
+  dispositivos          Dispositivo[]
+  dispositivosAgrupados DispositivoAgrupado[]
+
+  @@index([usuario_id], map: "fk_grupos_usuario")
+  @@map("grupos")
+}
+
+model TipoDispositivo {
+  id               Int           @id @default(autoincrement())
+  nombre           String        @db.VarChar(100)
+  consumo_minimo_w Int?
+  consumo_maximo_w Int?
+  dispositivos     Dispositivo[]
+  alertas          Alerta[]
+
+  @@map("tipos_dispositivos")
+}
+
+model Dispositivo {
+  id                  Int               @id @default(autoincrement())
+  nombre              String            @db.VarChar(100)
+  ubicacion           String?           @db.VarChar(100)
+  usuario_id          Int
+  id_grupo            Int?
+  id_sensor           Int?
+  id_tipo_dispositivo Int?
+  usuario             Usuario           @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "dispositivos_ibfk_1")
+  grupo               Grupo?            @relation(fields: [id_grupo], references: [id], onUpdate: NoAction, map: "dispositivos_ibfk_2")
+  tipo                TipoDispositivo?  @relation(fields: [id_tipo_dispositivo], references: [id], onUpdate: NoAction, map: "fk_alertas_tipo_dispositivo")
+  sensor              Sensor?           @relation("DispositivoSensor")
+  alertas             Alerta[]
+  configs             ConfiguracionAhorro[]
+  dispositivosAgrupados DispositivoAgrupado[]
+
+  @@index([usuario_id], map: "usuario_id")
+  @@index([id_grupo], map: "id_grupo")
+  @@map("dispositivos")
+}
+
+model DispositivoAgrupado {
+  id             Int         @id @default(autoincrement())
+  grupo_id       Int
+  dispositivo_id Int
+  grupo          Grupo       @relation(fields: [grupo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "dispositivos_agrupados_ibfk_1")
+  dispositivo    Dispositivo @relation(fields: [dispositivo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "dispositivos_agrupados_ibfk_2")
+
+  @@index([grupo_id], map: "grupo_id")
+  @@index([dispositivo_id], map: "dispositivo_id")
+  @@map("dispositivos_agrupados")
+}
+
+model Sensor {
+  id                Int          @id @default(autoincrement())
+  dispositivo_id    Int?
+  tipo              String       @db.VarChar(50)
+  mac_address       String       @db.VarChar(50)
+  fecha_instalacion DateTime     @default(now()) @db.Timestamp(0)
+  asignado          Boolean?     @default(false) @db.TinyInt
+  usuario_id        Int?
+  dispositivo       Dispositivo? @relation("DispositivoSensor", fields: [dispositivo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "sensores_ibfk_1")
+  mediciones        Medicion[]
+  usuario           Usuario?     @relation(fields: [usuario_id], references: [id])
+
+  @@unique([mac_address, usuario_id], map: "mac_address")
+  @@index([dispositivo_id], map: "dispositivo_id")
+  @@map("sensores")
+}
+
+model Medicion {
+  id              Int       @id @default(autoincrement())
+  sensor_id       Int?
+  voltaje         Decimal?  @db.Decimal(5, 2)
+  corriente       Decimal?  @db.Decimal(5, 2)
+  potencia        Decimal?  @db.Decimal(6, 2)
+  factor_potencia Decimal?  @db.Decimal(4, 2)
+  fecha_hora      DateTime  @default(now()) @db.Timestamp(0)
+  energia         Float?
+  frecuencia      Float?
+  sensor          Sensor?   @relation(fields: [sensor_id], references: [id], onUpdate: Cascade, map: "mediciones_ibfk_1")
+
+  @@index([sensor_id], map: "sensor_id")
+  @@map("mediciones")
+}
+
+model TipoAlerta {
+  id             Int                    @id @default(autoincrement())
+  clave          String                 @unique @db.VarChar(50)
+  nombre         String                 @db.VarChar(100)
+  descripcion    String?                @db.Text
+  icono_svg      String?                @db.Text
+  fecha_creacion DateTime?              @default(now()) @db.Timestamp(0)
+  alertas        Alerta[]
+  configs        ConfiguracionAhorro[]
+
+  @@map("tipos_alerta")
+}
+
+model Alerta {
+  id                  Int              @id @default(autoincrement())
+  usuario_id          Int
+  mensaje             String           @db.VarChar(255)
+  nivel               Nivel
+  fecha               DateTime         @default(now()) @db.Timestamp(0)
+  id_tipo_dispositivo Int?
+  tipo_alerta_id      Int?
+  dispositivo_id      Int?
+  leida               Boolean          @default(false) @db.TinyInt
+  usuario             Usuario          @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "alertas_ibfk_1")
+  dispositivo         Dispositivo?     @relation(fields: [dispositivo_id], references: [id], onUpdate: NoAction, map: "fk_alertas_dispositivo")
+  tipo_alerta         TipoAlerta?      @relation(fields: [tipo_alerta_id], references: [id], onUpdate: NoAction, map: "fk_alertas_tipo_alertas")
+  tipo_dispositivo    TipoDispositivo? @relation(fields: [id_tipo_dispositivo], references: [id], onUpdate: NoAction, map: "fk_alertas_tipo_dispositivo")
+
+  @@index([usuario_id], map: "usuario_id")
+  @@index([id_tipo_dispositivo], map: "fk_alertas_tipo_dispositivo")
+  @@index([tipo_alerta_id], map: "fk_alertas_tipo_alertas")
+  @@index([dispositivo_id], map: "fk_alertas_dispositivo")
+  @@map("alertas")
+}
+
+enum Nivel {
+  Bajo
+  Medio
+  Alto
+}
+
+model ConfiguracionAhorro {
+  id             Int         @id @default(autoincrement())
+  usuario_id     Int
+  dispositivo_id Int
+  minimo         Decimal?    @db.Decimal(10, 2)
+  maximo         Decimal?    @db.Decimal(10, 2)
+  clave_alerta   String?     @db.VarChar(20)
+  mensaje        String?     @db.VarChar(255)
+  usuario        Usuario     @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "configuracion_ahorro_ibfk_1")
+  dispositivo    Dispositivo @relation(fields: [dispositivo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "configuracion_ahorro_ibfk_2")
+  tipo_alerta    TipoAlerta? @relation(fields: [clave_alerta], references: [clave], onUpdate: NoAction, map: "configuracion_ahorro_ibfk_3")
+
+  @@index([usuario_id], map: "usuario_id")
+  @@index([dispositivo_id], map: "dispositivo_id")
+  @@index([clave_alerta], map: "clave_alerta")
+  @@map("configuracion_ahorro")
+}
+
+model Reporte {
+  id               Int            @id @default(autoincrement())
+  usuario_id       Int
+  tipo_reporte     TipoReporte?
+  fecha_generacion DateTime       @default(now()) @db.Timestamp(0)
+  datos            Bytes          @db.Blob
+  usuario          Usuario        @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "reportes_ibfk_1")
+
+  @@index([usuario_id], map: "usuario_id")
+  @@map("reportes")
+}
+
+enum TipoReporte {
+  Diario
+  Semanal
+  Mensual
+}
+
+model RecuperacionPassword {
+  id               Int      @id @default(autoincrement())
+  usuario_id       Int
+  token            String   @unique(map: "token_unique") @db.VarChar(255)
+  fecha_expiracion DateTime? @db.Timestamp(0)
+  creado_en        DateTime @default(now()) @db.Timestamp(0)
+  usuario          Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "recuperacion_passwords_ibfk_1")
+
+  @@index([usuario_id], map: "usuario_id")
+  @@map("recuperacion_passwords")
+}
