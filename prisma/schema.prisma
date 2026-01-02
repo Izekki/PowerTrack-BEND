@@ -81,7 +81,7 @@ model Dispositivo {
   id_tipo_dispositivo Int?
   usuario             Usuario           @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "dispositivos_ibfk_1")
   grupo               Grupo?            @relation(fields: [id_grupo], references: [id], onUpdate: NoAction, map: "dispositivos_ibfk_2")
-  tipo                TipoDispositivo?  @relation(fields: [id_tipo_dispositivo], references: [id], onUpdate: NoAction, map: "fk_alertas_tipo_dispositivo")
+  tipo                TipoDispositivo?  @relation(fields: [id_tipo_dispositivo], references: [id], onUpdate: NoAction, map: "fk_dispositivo_tipo")
   sensor              Sensor?           @relation("DispositivoSensor")
   alertas             Alerta[]
   configs             ConfiguracionAhorro[]
@@ -106,7 +106,7 @@ model DispositivoAgrupado {
 
 model Sensor {
   id                Int          @id @default(autoincrement())
-  dispositivo_id    Int?
+  dispositivo_id    Int?         @unique
   tipo              String       @db.VarChar(50)
   mac_address       String       @db.VarChar(50)
   fecha_instalacion DateTime     @default(now()) @db.Timestamp(0)
