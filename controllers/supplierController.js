@@ -30,6 +30,18 @@ export const registerSupplier = async (req, res) => {
         return res.status(400).json({ message: "Nombre requerido" });
     }
 
+    const requiredFields = { cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, demanda_minima, factor_carga };
+    const missingFields = Object.entries(requiredFields)
+        .filter(([key, value]) => value === undefined || value === null)
+        .map(([key]) => key);
+
+    if (missingFields.length > 0) {
+        return res.status(400).json({
+            message: "Campos requeridos faltantes",
+            missing: missingFields
+        });
+    }
+
     try {
         const newSupplier = await SupplierModel.createSupplier({ input: {
             nombre, cargo_fijo, cargo_variable, cargo_distribucion, cargo_capacidad, region, demanda_minima, factor_carga
