@@ -143,11 +143,13 @@ export const getUnassignedDevices = async (req, res) => {
 export const allDeviceForUser = async (req,res) => {
   const {id} = req.params;
   try {
-    const device = await getAllDeviceForUserFromDB(id);
-    if (!device) return res.status(404).json({ message: 'No se encontraron los dispositivos' });
-    res.json(device);
+    const devices = await getAllDeviceForUserFromDB(id);
+
+    // Garantizamos devolver siempre un arreglo para evitar errores en el cliente
+    res.json(Array.isArray(devices) ? devices : []);
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener el dispositivo', error });
+    console.error('Error al obtener dispositivos por usuario:', error);
+    res.status(500).json({ message: 'Error al obtener el dispositivo', error: error.message });
   }
 }
 

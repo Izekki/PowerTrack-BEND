@@ -58,13 +58,8 @@ export const allGroupsForUser = async (req, res) => {
         const numericUserId = parseInt(usuarioId, 10);
         const groups = await allGroupsForUserBD(numericUserId);
 
-        if (groups.length === 0) {
-            return res.status(404).json({
-                message: "El usuario no tiene grupos registrados",
-            });
-        }
-
-        res.status(200).json(groups);
+        // Siempre devolver arreglo (aunque esté vacío) para evitar romper el cliente
+        res.status(200).json(Array.isArray(groups) ? groups : []);
 
     } catch (error) {
         res.status(500).json({
