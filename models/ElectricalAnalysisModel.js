@@ -314,10 +314,16 @@ getConsumoPorDispositivosYGruposPorUsuario = async (id_usuario) => {
     console.log(`Dispositivos encontrados: ${dispositivos.length}`);
     if (!dispositivos.length) return { mensaje: "No hay dispositivos para este usuario" };
     
-    const [filasGrupos] = await db.query(
-      `SELECT id, nombre FROM grupos WHERE id IN (?)`,
-      [dispositivos.map(d => d.grupoId).filter(id => id !== null)]
-    );
+    const gruposIds = dispositivos.map(d => d.grupoId).filter(id => id !== null);
+    
+    let filasGrupos = [];
+    if (gruposIds.length > 0) {
+      const [rows] = await db.query(
+        `SELECT id, nombre FROM grupos WHERE id IN (?)`,
+        [gruposIds]
+      );
+      filasGrupos = rows;
+    }
 
     const mapaNombreGrupo = filasGrupos.reduce((map, g) => {
       map[g.id] = g.nombre;
