@@ -14,8 +14,8 @@ export const updateDevice = async (id, name, ubicacion, id_usuario, id_grupo) =>
   return result.affectedRows;
 };
 
-export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo, id_sensor) => {
-  const [result] = await db.query(
+export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo, id_sensor, connection = db) => {
+  const [result] = await connection.query(
     `INSERT INTO dispositivos 
       (nombre, ubicacion, usuario_id, id_grupo, id_sensor, id_tipo_dispositivo) 
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -24,8 +24,8 @@ export const createDevice = async (nombre, ubicacion, usuario_id, id_grupo, id_s
   return result.insertId;
 };
 
-export const getConsumoLimitesPorTipoDispositivo = async (id_tipo_dispositivo) => {
-  const [rows] = await db.query(
+export const getConsumoLimitesPorTipoDispositivo = async (id_tipo_dispositivo, connection = db) => {
+  const [rows] = await connection.query(
     `SELECT consumo_minimo_w, consumo_maximo_w FROM tipos_dispositivos WHERE id = ?`,
     [id_tipo_dispositivo]
   );

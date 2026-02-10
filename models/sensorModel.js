@@ -31,11 +31,11 @@ export const findAssignedSensorById = async (sensorId) => {
     }
   }
 
-  export const createSensor = async (mac, usuario_id) => {
+  export const createSensor = async (mac, usuario_id, connection = db) => {
     try {
       const tipo = `Sensor Nuevo`;
   
-      const [result] = await db.query(
+        const [result] = await connection.query(
         'INSERT INTO sensores (mac_address, tipo, asignado, usuario_id) VALUES (?, ?, false, ?)', 
         [mac, tipo, usuario_id]
       );
@@ -50,9 +50,9 @@ export const findAssignedSensorById = async (sensorId) => {
   
   
 
-  export const findSensorByMac = async (mac) => {
+  export const findSensorByMac = async (mac, connection = db) => {
     try {
-      const [rows] = await db.query('SELECT * FROM sensores WHERE mac_address = ?', [mac]);
+        const [rows] = await connection.query('SELECT * FROM sensores WHERE mac_address = ?', [mac]);
       return rows.length > 0 ? rows[0] : null;
     } catch (error) {
       console.error('Error al buscar el sensor:', error);
@@ -76,7 +76,7 @@ export const findAssignedSensorById = async (sensorId) => {
   
   
 
-  export const updateSensor = async (id, fields) => {
+  export const updateSensor = async (id, fields, connection = db) => {
     const keys = Object.keys(fields);
     const values = Object.values(fields);
   
@@ -87,7 +87,7 @@ export const findAssignedSensorById = async (sensorId) => {
     const setClause = keys.map(key => `${key} = ?`).join(', ');
   
     const query = `UPDATE sensores SET ${setClause} WHERE id = ?`;
-    await db.query(query, [...values, id]);
+    await connection.query(query, [...values, id]);
   };
   
 

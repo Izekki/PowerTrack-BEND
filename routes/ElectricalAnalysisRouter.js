@@ -16,6 +16,7 @@ router.get('/dispositivo/:id/consumo-actual',eac.getConsumoActual);
 router.get('/dispositivosPorUsuarios/:idUsuario/consumo-actual',eac.getDispositivosPorUsuarioConsumo);
 router.get('/dispositivo/:id/consumo-detallado',eac.getConsumoDetalladoPorDispositivo);
 router.get('/consumoPorDispositivosGrupos/:id',eac.getConsumoPorDispositivosYGrupos);
+router.get('/consumoPorDispositivosGruposReal/:id',eac.getConsumoPorDispositivosYGruposReal);
 router.get('/consumoPorDispositivosYGruposPorUsuarioConRango/:id',eac.getConsumoPorDispositivosYGruposPorUsuarioConRango);
 router.get("/historial_resumen/:idUsuario", eac.getHistorialResumenPorRango);
 router.get("/historial_detallado/:idUsuario", eac.getHistorialDetalladoPorRango);
