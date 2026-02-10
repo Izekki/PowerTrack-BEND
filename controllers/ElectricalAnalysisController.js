@@ -411,6 +411,27 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
   }
 };
 
+  getConsumoPorDispositivosYGruposReal = async (req, res) => {
+  const { id } = req.params;
+  const { fechaInicio, fechaFin } = req.query;
+
+  try {
+    const datos = await this.electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuarioReal(
+      id,
+      fechaInicio,
+      fechaFin
+    );
+
+    res.status(200).json(datos);
+  } catch (error) {
+    console.error("Error en controller (real):", error);
+    res.status(500).json({
+      mensaje: "Error al obtener el consumo real y proyectado del usuario",
+      error: error.message,
+    });
+  }
+};
+
 
 
 

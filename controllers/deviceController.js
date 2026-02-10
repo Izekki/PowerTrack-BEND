@@ -4,6 +4,7 @@ import { getDeviceByIdFromDB, updateDevice,
 import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
 import {insertConfiguracionAhorro,updateConfiguracionAhorroMinAndMax} from '../models/savingsSettinsModel.js'
 import { getSensorByDeviceId,updateSensorMac } from '../models/sensorModel.js';
+import { db } from '../db/connection.js';
 
 export const editDevice = async (req, res) => {
   const { id } = req.params;
@@ -57,34 +58,42 @@ export const getDeviceById = async (req, res) => {
 
 export const addDevice = async (req, res) => {
   const { nombre, ubicacion, usuario_id, id_grupo, mac } = req.body;
+  let connection;
 
   try {
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
     // Verificar si el usuario ya tiene un sensor con esa MAC
-    const existingSensor = await findSensorByMac(mac);
+    const existingSensor = await findSensorByMac(mac, connection);
     
     if (existingSensor) {
+      await connection.rollback();
       return res.status(400).json({ 
-        message: 'Este usuario ya tiene un sensor registrado con esta MAC.' 
+        message: 'Ya existe un sensor registrado con esta MAC.' 
       });
     }
 
     // Crear el sensor
-    const newSensorId = await createSensor(mac, usuario_id);
+    const newSensorId = await createSensor(mac, usuario_id, connection);
     if (!newSensorId) {
-      return res.status(500).json({ message: 'Error al crear el sensor' });
+      throw new Error('Error al crear el sensor');
     }
 
     // Crear el dispositivo asociado
-    const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, newSensorId);
+    const newDeviceId = await createDevice(nombre, ubicacion, usuario_id, id_grupo, newSensorId, connection);
+    if (!newDeviceId) {
+      throw new Error('Error al crear el dispositivo');
+    }
 
     // Actualizar el sensor con estado de asignado y dispositivo_id
     await updateSensor(newSensorId, {
       asignado: true,
       dispositivo_id: newDeviceId
-    });
+    }, connection);
 
     // Obtener tipo de dispositivo (siempre 0 por ahora)
-    const { consumo_minimo_w, consumo_maximo_w } = await getConsumoLimitesPorTipoDispositivo(0);
+    const { consumo_minimo_w, consumo_maximo_w } = await getConsumoLimitesPorTipoDispositivo(0, connection);
 
     const mensaje = null;
     // Crear configuración inicial en configuracion_ahorro (valores por defecto)
@@ -94,8 +103,11 @@ export const addDevice = async (req, res) => {
       consumo_minimo_w,
       consumo_maximo_w,
       "consumo",
-      null // mensaje
+      mensaje,
+      connection
     );
+
+    await connection.commit();
 
     res.status(201).json({ 
       message: 'Dispositivo, sensor y configuración creados exitosamente', 
@@ -104,8 +116,19 @@ export const addDevice = async (req, res) => {
     });
 
   } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error('Error al hacer rollback:', rollbackError);
+      }
+    }
     console.error(error);
     res.status(500).json({ message: 'Error al crear el dispositivo, sensor o configuración', error });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 };
 
