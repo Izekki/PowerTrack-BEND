@@ -6,7 +6,7 @@ export const validateDevice = async (req, res, next) => {
   const { nombre, ubicacion, usuario_id, id_grupo, id_sensor } = req.body;
 
   // Validación de campos obligatorios
-  if (!nombre || !ubicacion || !usuario_id) {
+  if (!nombre || !usuario_id) {
     return res.status(400).json({ message: 'Todos los campos son obligatorios' });
   }
 

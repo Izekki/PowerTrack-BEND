@@ -46,7 +46,7 @@ export const validateRegister = (req, res, next) => {
      email = email.trim();
      if (email > 100) return ['El nombre no debe tener mas de 100 caracteres'];
      if (email.includes(" ")) return ["El correo no puede contener espacios"];
-     if (email.includes("_")) return ["El correo no puede contener guion bajo"];
+     //if (email.includes("_")) return ["El correo no puede contener guion bajo"];
      if (!/@/.test(email)) return ["El correo debe contener un @"];
      if(/.*@.*@.*/.test(email)) return ["El correo no puede contener dos @"];
      if(/ÁÉÍÓÚáéíóúÑñ/.test(email)) return ["El correo no puede contener ñ o letras con acento"];
