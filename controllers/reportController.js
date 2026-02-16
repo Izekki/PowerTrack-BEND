@@ -11,6 +11,13 @@ function safeToFixed(value, decimals, fallback = "N/A") {
   return parseFloat(value).toFixed(decimals);
 }
 
+function normalizeIsoToMysqlUtc(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 const generateUserReport = async (req, res) => {
   const userId = req.params.idUsuario;
   const { fechaInicio, fechaFinal } = req.body;
@@ -19,12 +26,19 @@ const generateUserReport = async (req, res) => {
     return res.status(400).json({ message: 'Las fechas de inicio y final son obligatorias.' });
   }
 
+  const fechaInicioSql = normalizeIsoToMysqlUtc(fechaInicio);
+  const fechaFinalSql = normalizeIsoToMysqlUtc(fechaFinal);
+
+  if (!fechaInicioSql || !fechaFinalSql) {
+    return res.status(400).json({ message: 'Formato de fecha invalido. Usa ISO 8601 con Z.' });
+  }
+
   try {
     const user = await getProfileByIdDB(userId);
     if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
 
-    // Get consumption data using the new function with date range
-    const consumoData = await electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuarioConRango(userId, fechaInicio, fechaFinal);
+    // Get consumption data using the real-consumption function with date range
+    const consumoData = await electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuarioReal(userId, fechaInicioSql, fechaFinalSql);
 
     // Formatear consumo por día
     const consumoPorDia = consumoData.consumoPorDia.map(item => ({
@@ -37,17 +51,18 @@ const generateUserReport = async (req, res) => {
       return res.status(404).json({ message: 'No se encontraron datos de consumo para el período solicitado' });
     }
 
-    // Cálculos generales
-    const consumoTotalPeriodo = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.consumoTotalKWh, 0);
-    const costoTotalPeriodo = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.costoTotalMXN, 0);
-    const consumoDiarioTotal = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.consumoDiarioTotalKWh, 0);
-    const costoDiarioTotal = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.costoDiarioTotalMXN, 0);
-    const consumoMensualTotal = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.consumoMensualTotalKWh, 0);
-    const costoMensualTotal = consumoData.resumenGrupos.reduce((sum, grupo) => sum + grupo.costoMensualTotalMXN, 0);
+    // Cálculos generales (usar resumenGeneral si existe, si no calcular desde grupos)
+    const resumenGeneral = consumoData.resumenGeneral || {};
+    const consumoTotalPeriodo = resumenGeneral.consumoRealKWh ?? consumoData.resumenGrupos.reduce((sum, grupo) => sum + (grupo.consumoRealKWh ?? grupo.consumoTotalKWh ?? 0), 0);
+    const costoTotalPeriodo = resumenGeneral.costoRealMXN ?? consumoData.resumenGrupos.reduce((sum, grupo) => sum + (grupo.costoRealMXN ?? grupo.costoTotalMXN ?? 0), 0);
+    const consumoDiarioTotal = resumenGeneral.consumoDiarioProyectadoKWh ?? consumoData.resumenGrupos.reduce((sum, grupo) => sum + (grupo.consumoDiarioProyectadoKWh ?? grupo.consumoDiarioTotalKWh ?? 0), 0);
+    const costoDiarioTotal = resumenGeneral.costoDiarioProyectadoMXN ?? consumoData.resumenGrupos.reduce((sum, grupo) => sum + (grupo.costoDiarioProyectadoMXN ?? grupo.costoDiarioTotalMXN ?? 0), 0);
+    const consumoMensualTotal = resumenGeneral.consumoMensualProyectadoKWh ?? consumoData.resumenGrupos.reduce((sum, grupo) => sum + (grupo.consumoMensualProyectadoKWh ?? grupo.consumoMensualTotalKWh ?? 0), 0);
+    const costoMensualTotal = resumenGeneral.costoMensualProyectadoMXN ?? consumoData.resumenGrupos.reduce((sum, grupo) => sum + (grupo.costoMensualProyectadoMXN ?? grupo.costoMensualTotalMXN ?? 0), 0);
 
     // Calcular días entre fechas
     const fechaInicioDate = new Date(fechaInicio);
-    const fechaFinalDate = new Date(fechaFinal);
+    const fechaFinalDate = new Date(consumoData.fechaFinReal || fechaFinal);
     const diffTime = Math.abs(fechaFinalDate - fechaInicioDate);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     const consumoPromedioPorDia = consumoTotalPeriodo / diffDays;
@@ -55,25 +70,26 @@ const generateUserReport = async (req, res) => {
     // Formato grupos y dispositivos
     const grupos = consumoData.resumenGrupos.map(grupo => ({
       nombre: grupo.nombre,
-      consumoTotalKWh: safeToFixed(grupo.consumoTotalKWh, 4),
-      costoTotalMXN: safeToFixed(grupo.costoTotalMXN, 2),
-      consumoDiarioTotalKWh: safeToFixed(grupo.consumoDiarioTotalKWh, 4),
-      costoDiarioTotalMXN: safeToFixed(grupo.costoDiarioTotalMXN, 2),
-      consumoMensualTotalKWh: safeToFixed(grupo.consumoMensualTotalKWh, 4),
-      costoMensualTotalMXN: safeToFixed(grupo.costoMensualTotalMXN, 2),
-      consumoPorDiaKWh: safeToFixed(grupo.consumoTotalKWh / diffDays, 4),
+      consumoTotalKWh: safeToFixed(grupo.consumoRealKWh ?? grupo.consumoTotalKWh, 4),
+      costoTotalMXN: safeToFixed(grupo.costoRealMXN ?? grupo.costoTotalMXN, 2),
+      consumoDiarioTotalKWh: safeToFixed(grupo.consumoDiarioProyectadoKWh ?? grupo.consumoDiarioTotalKWh, 4),
+      costoDiarioTotalMXN: safeToFixed(grupo.costoDiarioProyectadoMXN ?? grupo.costoDiarioTotalMXN, 2),
+      consumoMensualTotalKWh: safeToFixed(grupo.consumoMensualProyectadoKWh ?? grupo.consumoMensualTotalKWh, 4),
+      costoMensualTotalMXN: safeToFixed(grupo.costoMensualProyectadoMXN ?? grupo.costoMensualTotalMXN, 2),
+      consumoPorDiaKWh: safeToFixed((grupo.consumoRealKWh ?? grupo.consumoTotalKWh ?? 0) / diffDays, 4),
       dispositivos: grupo.dispositivos.map(dispositivo => ({
         nombre: dispositivo.nombre,
         dispositivo_id: dispositivo.dispositivo_id,
-        fechaMedicion: new Date(dispositivo.fechaMedicion).toLocaleString(),
-        potenciaW: safeToFixed(dispositivo.potenciaW, 2),
-        consumoActualKWh: safeToFixed(dispositivo.consumoActualKWh, 6),
-        costoPorMedicionMXN: safeToFixed(dispositivo.costoPorMedicionMXN, 2),
-        consumoDiarioKWh: safeToFixed(dispositivo.consumoDiarioKWh, 4),
-        costoDiarioMXN: safeToFixed(dispositivo.costoDiarioMXN, 2),
-        consumoMensualKWh: safeToFixed(dispositivo.consumoMensualKWh, 4),
-        costoMensualMXN: safeToFixed(dispositivo.costoMensualMXN, 2),
-        consumoPorDiaKWh: safeToFixed(dispositivo.consumoActualKWh * (24 * 60) / 5 / diffDays, 4),
+        fechaMedicion: dispositivo.fechaMedicion,
+        potenciaW: safeToFixed(dispositivo.potenciaPromedioActivaW ?? dispositivo.potenciaPromedioW ?? dispositivo.potenciaW, 2),
+        consumoActualKWh: safeToFixed(dispositivo.consumoRealKWh ?? dispositivo.consumoActualKWh, 6),
+        costoPorMedicionMXN: safeToFixed(dispositivo.costoRealMXN ?? dispositivo.costoPorMedicionMXN, 2),
+        consumoDiarioKWh: safeToFixed(dispositivo.consumoDiarioProyectadoKWh ?? dispositivo.consumoDiarioKWh, 4),
+        costoDiarioMXN: safeToFixed(dispositivo.costoDiarioProyectadoMXN ?? dispositivo.costoDiarioMXN, 2),
+        consumoMensualKWh: safeToFixed(dispositivo.consumoMensualProyectadoKWh ?? dispositivo.consumoMensualKWh, 4),
+        costoMensualMXN: safeToFixed(dispositivo.costoMensualProyectadoMXN ?? dispositivo.costoMensualMXN, 2),
+        consumoPorDiaKWh: safeToFixed((dispositivo.consumoRealKWh ?? 0) / diffDays, 4),
+        factorUtilizacion: safeToFixed(dispositivo.factorUtilizacion, 4),
         detalleTarifas: {
           cargo_variable: dispositivo.detalleTarifas.cargo_variable,
           cargo_capacidad: dispositivo.detalleTarifas.cargo_capacidad,
