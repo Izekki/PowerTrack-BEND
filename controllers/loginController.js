@@ -5,14 +5,28 @@ export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // Validar que los campos requeridos estén presentes
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'El correo electrónico y la contraseña son requeridos' 
+      });
+    }
+
     const user = await getUserByEmail(email);
     if (!user) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+      return res.status(401).json({ 
+        success: false,
+        message: 'El correo electrónico o contraseña es incorrecta' 
+      });
     }
 
     const isValidPassword = await validatePassword(password, user.contraseña);
     if (!isValidPassword) {
-      return res.status(401).json({ message: 'Credenciales inválidas' });
+      return res.status(401).json({ 
+        success: false,
+        message: 'El correo electrónico o contraseña es incorrecta' 
+      });
     }
 
     // Crear token JWT
@@ -28,6 +42,7 @@ export const loginUser = async (req, res) => {
     //req.session.userId = user.id;
 
     res.status(200).json({ 
+      success: true,
       message: 'Inicio de sesión exitoso', 
       userId: user.id,
       nombre: user.nombre,
@@ -36,6 +51,9 @@ export const loginUser = async (req, res) => {
     
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({ message: 'Error interno del servidor', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error interno del servidor' 
+    });
   }
 };

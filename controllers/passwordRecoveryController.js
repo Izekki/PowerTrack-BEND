@@ -6,6 +6,9 @@ import {
   } from '../models/passwordRecoveryModel.js'
   import { sendMail } from '../utils/mailService.js';
   import dotenv from 'dotenv';
+  import NotFoundError from '../models/modelserror/NotFoundError.js';
+  import ValidationError from '../models/modelserror/ValidationError.js';
+  import DBConnectionError from '../models/modelserror/DBConnectionError.js';
 
   dotenv.config();
   
@@ -44,9 +47,17 @@ import {
         message: 'Se ha enviado un correo con instrucciones para recuperar tu contraseña'
       });
     } catch (error) {
+      // Manejar usuario no encontrado
+      if (error instanceof NotFoundError) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Error al procesar solicitud de recuperación'
       });
     }
   };
@@ -69,9 +80,17 @@ import {
         message: 'Token válido'
       });
     } catch (error) {
-      res.status(400).json({
+      // Manejar token inválido o expirado
+      if (error instanceof ValidationError) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Error al verificar el token'
       });
     }
   };
@@ -94,6 +113,20 @@ import {
           message: 'Las contraseñas no coinciden'
         });
       }
+
+      if (nuevaPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: 'La contraseña debe tener al menos 8 caracteres'
+        });
+      }
+
+      if (nuevaPassword.length > 20) {
+        return res.status(400).json({
+          success: false,
+          message: 'La contraseña no puede tener más de 20 caracteres'
+        });
+      }
       
       // Verificar que el token sea válido
       const tokenData = await verifyRecoveryToken(token);
@@ -106,9 +139,17 @@ import {
         message: 'Contraseña actualizada correctamente'
       });
     } catch (error) {
+      // Manejar token inválido o expirado
+      if (error instanceof ValidationError) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Error al actualizar la contraseña'
       });
     }
   };

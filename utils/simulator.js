@@ -3,7 +3,9 @@ import axios from 'axios';
 import mysql from 'mysql2/promise';
 
 const CONFIG = {
-  API_URL: 'http://localhost:5051/electrical_analysis/mediciones/guardar', 
+  API_BASE_URL: 'http://localhost:5051',
+  API_URL: 'http://localhost:5051/electrical_analysis/mediciones/guardar',
+  LOGIN_URL: 'http://localhost:5051/login',
   USUARIO_ID: 1,
   
   // === CONFIGURACIÓN ===
@@ -37,6 +39,39 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
 });
+
+let cachedToken = null;
+
+async function getAuthToken() {
+  if (process.env.SIMULATOR_TOKEN) {
+    return process.env.SIMULATOR_TOKEN;
+  }
+
+  if (cachedToken) {
+    return cachedToken;
+  }
+
+  const email = process.env.SIMULATOR_EMAIL;
+  const password = process.env.SIMULATOR_PASSWORD;
+
+  if (!email || !password) {
+    throw new Error('Falta SIMULATOR_TOKEN o SIMULATOR_EMAIL/SIMULATOR_PASSWORD en el .env');
+  }
+
+  const response = await axios.post(
+    CONFIG.LOGIN_URL,
+    { email, password },
+    { timeout: 5000 }
+  );
+
+  const token = response?.data?.token;
+  if (!token) {
+    throw new Error('No se recibio token al iniciar sesion en /login');
+  }
+
+  cachedToken = token;
+  return cachedToken;
+}
 
 async function getSensoresUsuario24() {
   const [rows] = await pool.query(
@@ -118,10 +153,36 @@ async function enviarMedicion(mac, medicion, nombre) {
       return { success: false, dev: nombre, err: 'Omitido (hueco de datos)' };
     }
     // Enviar MAC tal cual en DB (con dos puntos)
-    await axios.post(CONFIG.API_URL, { mac_address: mac, ...medicion }, { timeout: 5000 });
+    const token = await getAuthToken();
+    await axios.post(
+      CONFIG.API_URL,
+      { mac_address: mac, ...medicion },
+      {
+        timeout: 5000,
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
     const timeStr = new Date(medicion.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     return { success: true, dev: nombre, w: medicion.potencia, t: timeStr };
   } catch (error) {
+    if (error?.response?.status === 401) {
+      cachedToken = null;
+      try {
+        const token = await getAuthToken();
+        await axios.post(
+          CONFIG.API_URL,
+          { mac_address: mac, ...medicion },
+          {
+            timeout: 5000,
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const timeStr = new Date(medicion.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        return { success: true, dev: nombre, w: medicion.potencia, t: timeStr };
+      } catch (retryError) {
+        return { success: false, dev: nombre, err: retryError.message };
+      }
+    }
     return { success: false, dev: nombre, err: error.message };
   }
 }
