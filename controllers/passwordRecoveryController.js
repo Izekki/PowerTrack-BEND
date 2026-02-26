@@ -25,13 +25,26 @@ import {
       }
   
       const recoveryData = await createPasswordRecoveryRequest(correo);
-      
-      const resetLink = `${process.env.URL_FRONT}/reset-password/${recoveryData.token}`;
+
+      const frontendUrl = (process.env.URL_FRONT || process.env.FRONT_URL || req.headers.origin || '').trim();
+      if (!frontendUrl) {
+        return res.status(500).json({
+          success: false,
+          message: 'URL de frontend no configurada para enviar el enlace de recuperacion'
+        });
+      }
+
+      const resetLink = `${frontendUrl}/reset-password/${recoveryData.token}`;
       
       // Aquí implementarías el envío real del correo
       await sendMail({
         to: correo,
         subject: 'Recuperación de contraseña',
+        text: `Hola ${recoveryData.usuario.nombre},\n\n` +
+          `Has solicitado restablecer tu contraseña. Usa este enlace para crear una nueva contraseña:\n` +
+          `${resetLink}\n\n` +
+          `Este enlace expirará en 24 horas.\n` +
+          `Si no solicitaste este cambio, ignora este correo.`,
         html: `
           <h1>Recuperación de contraseña</h1>
           <p>Hola ${recoveryData.usuario.nombre},</p>
