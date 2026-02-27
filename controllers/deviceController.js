@@ -9,10 +9,22 @@ import { db } from '../db/connection.js';
 export const editDevice = async (req, res) => {
   const { id } = req.params;
   const { name, ubicacion, id_grupo, mac_address } = req.body;
+  const authenticatedUserId = req.user.userId;
 
   try {
     const device = await getDeviceByIdFromDB(id);
-    if (!device) return res.status(404).json({ message: 'Dispositivo no encontrado' });
+    if (!device) return res.status(404).json({ 
+      success: false,
+      message: 'Dispositivo no encontrado' 
+    });
+
+    //  Validar que el dispositivo pertenece al usuario autenticado
+    if (device.usuario_id !== authenticatedUserId) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'No tienes permiso para editar este dispositivo' 
+      });
+    }
 
     const id_usuario = device.usuario_id;
 
@@ -26,19 +38,33 @@ export const editDevice = async (req, res) => {
         await updateSensorMac(sensor.id, mac_address);
       } else {
         // Si no hay sensor, opcional: crear uno o devolver error
-        return res.status(404).json({ message: 'Sensor relacionado no encontrado para este dispositivo' });
+        return res.status(404).json({ 
+          success: false,
+          message: 'Sensor relacionado no encontrado para este dispositivo' 
+        });
       }
     }
 
     if (updatedDevice) {
       const updated = await getDeviceByIdFromDB(id);
-      res.json(updated);
+      res.json({ 
+        success: true,
+        data: updated,
+        message: 'Dispositivo actualizado correctamente' 
+      });
     } else {
-      res.status(500).json({ message: 'No se pudo actualizar el dispositivo' });
+      res.status(500).json({ 
+        success: false,
+        message: 'No se pudo actualizar el dispositivo' 
+      });
     }
 
   } catch (error) {
-    res.status(500).json({ message: 'Error interno del servidor', error });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error interno del servidor', 
+      error 
+    });
   }
 };
 
@@ -58,9 +84,18 @@ export const getDeviceById = async (req, res) => {
 
 export const addDevice = async (req, res) => {
   const { nombre, ubicacion, usuario_id, id_grupo, mac } = req.body;
+  const authenticatedUserId = req.user.userId;
   let connection;
 
   try {
+    // Validar que el usuario_id en el body coincida con el del token
+    if (parseInt(usuario_id) !== authenticatedUserId) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'No tienes permiso para crear dispositivos para otros usuarios' 
+      });
+    }
+
     connection = await db.getConnection();
     await connection.beginTransaction();
 
@@ -70,6 +105,7 @@ export const addDevice = async (req, res) => {
     if (existingSensor) {
       await connection.rollback();
       return res.status(400).json({ 
+        success: false,
         message: 'Ya existe un sensor registrado con esta MAC.' 
       });
     }
@@ -110,6 +146,7 @@ export const addDevice = async (req, res) => {
     await connection.commit();
 
     res.status(201).json({ 
+      success: true,
       message: 'Dispositivo, sensor y configuración creados exitosamente', 
       dispositivo_id: newDeviceId,
       sensor_id: newSensorId
@@ -124,7 +161,11 @@ export const addDevice = async (req, res) => {
       }
     }
     console.error(error);
-    res.status(500).json({ message: 'Error al crear el dispositivo, sensor o configuración', error });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al crear el dispositivo, sensor o configuración', 
+      error 
+    });
   } finally {
     if (connection) {
       connection.release();
@@ -213,16 +254,43 @@ export const updateTipoDispositivo = async (req, res) => {
 
 export const deleteDeviceFromId = async (req, res) => {
   const deviceId = parseInt(req.params.id);
-  const usuarioId = parseInt(req.body.usuarioId);
+  const authenticatedUserId = req.user.userId;
 
-  if (isNaN(deviceId) || isNaN(usuarioId)) {
-    return res.status(400).json({ error: 'ID de dispositivo o usuario inválido' });
+  if (isNaN(deviceId)) {
+    return res.status(400).json({ 
+      success: false,
+      error: 'ID de dispositivo inválido' 
+    });
   }
 
   try {
-    const result = await deleteDeviceFromIdDB(deviceId, usuarioId);
-    res.status(200).json(result);
+    // Obtener el dispositivo y validar que pertenece al usuario autenticado
+    const device = await getDeviceByIdFromDB(deviceId);
+    if (!device) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Dispositivo no encontrado' 
+      });
+    }
+
+    // 🔒 Validar que el dispositivo pertenece al usuario autenticado
+    if (device.usuario_id !== authenticatedUserId) {
+      return res.status(403).json({ 
+        success: false,
+        error: 'No tienes permiso para eliminar este dispositivo' 
+      });
+    }
+
+    const result = await deleteDeviceFromIdDB(deviceId, authenticatedUserId);
+    res.status(200).json({ 
+      success: true,
+      message: 'Dispositivo eliminado correctamente',
+      data: result 
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 };

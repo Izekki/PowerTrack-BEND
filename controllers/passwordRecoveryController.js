@@ -6,6 +6,9 @@ import {
   } from '../models/passwordRecoveryModel.js'
   import { sendMail } from '../utils/mailService.js';
   import dotenv from 'dotenv';
+  import NotFoundError from '../models/modelserror/NotFoundError.js';
+  import ValidationError from '../models/modelserror/ValidationError.js';
+  import DBConnectionError from '../models/modelserror/DBConnectionError.js';
 
   dotenv.config();
   
@@ -22,13 +25,26 @@ import {
       }
   
       const recoveryData = await createPasswordRecoveryRequest(correo);
-      
-      const resetLink = `${process.env.URL_FRONT}/reset-password/${recoveryData.token}`;
+
+      const frontendUrl = (process.env.URL_FRONT || process.env.FRONT_URL || req.headers.origin || '').trim();
+      if (!frontendUrl) {
+        return res.status(500).json({
+          success: false,
+          message: 'URL de frontend no configurada para enviar el enlace de recuperacion'
+        });
+      }
+
+      const resetLink = `${frontendUrl}/reset-password/${recoveryData.token}`;
       
       // Aquí implementarías el envío real del correo
       await sendMail({
         to: correo,
         subject: 'Recuperación de contraseña',
+        text: `Hola ${recoveryData.usuario.nombre},\n\n` +
+          `Has solicitado restablecer tu contraseña. Usa este enlace para crear una nueva contraseña:\n` +
+          `${resetLink}\n\n` +
+          `Este enlace expirará en 24 horas.\n` +
+          `Si no solicitaste este cambio, ignora este correo.`,
         html: `
           <h1>Recuperación de contraseña</h1>
           <p>Hola ${recoveryData.usuario.nombre},</p>
@@ -44,9 +60,17 @@ import {
         message: 'Se ha enviado un correo con instrucciones para recuperar tu contraseña'
       });
     } catch (error) {
+      // Manejar usuario no encontrado
+      if (error instanceof NotFoundError) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Error al procesar solicitud de recuperación'
       });
     }
   };
@@ -69,9 +93,17 @@ import {
         message: 'Token válido'
       });
     } catch (error) {
-      res.status(400).json({
+      // Manejar token inválido o expirado
+      if (error instanceof ValidationError) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Error al verificar el token'
       });
     }
   };
@@ -94,6 +126,20 @@ import {
           message: 'Las contraseñas no coinciden'
         });
       }
+
+      if (nuevaPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: 'La contraseña debe tener al menos 8 caracteres'
+        });
+      }
+
+      if (nuevaPassword.length > 20) {
+        return res.status(400).json({
+          success: false,
+          message: 'La contraseña no puede tener más de 20 caracteres'
+        });
+      }
       
       // Verificar que el token sea válido
       const tokenData = await verifyRecoveryToken(token);
@@ -106,9 +152,17 @@ import {
         message: 'Contraseña actualizada correctamente'
       });
     } catch (error) {
+      // Manejar token inválido o expirado
+      if (error instanceof ValidationError) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Error al actualizar la contraseña'
       });
     }
   };

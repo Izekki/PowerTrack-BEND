@@ -9,9 +9,9 @@ export const getUserByEmail = async (email) => {
 export const validatePassword = async (password, storedPassword) => {
     let valid = false;
     try{
-      valid = await bcrypt.compareSync(password, storedPassword);
+      valid = await bcrypt.compare(password, storedPassword);
     }catch(e){
-      console.log(e);
+      console.log('Error validando contraseña:', e);
     }
   
     return valid;

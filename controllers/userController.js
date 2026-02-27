@@ -1,6 +1,9 @@
 import { userModel,getProfileByIdDB,updateProfileDB,changePasswordDB } from '../models/userModel.js';
 import DBConnectionError from '../models/modelserror/DBConnectionError.js';
 import DBElementAlredyExists from '../models/modelserror/DBElementAlredyExists.js';
+import ValidationError from '../models/modelserror/ValidationError.js';
+import AuthenticationError from '../models/modelserror/AuthenticationError.js';
+import NotFoundError from '../models/modelserror/NotFoundError.js';
 
 export class userController {
 
@@ -83,11 +86,11 @@ export const changePassword = async (req, res) => {
             });
         }
 
-        // Validaciones adicionales
+        // Validaciones de entrada
         if (!currentPassword || !newPassword) {
             return res.status(400).json({
                 success: false,
-                message: 'Se requieren ambas contraseñas'
+                message: 'La contraseña actual y la nueva contraseña son requeridas'
             });
         }
 
@@ -98,6 +101,13 @@ export const changePassword = async (req, res) => {
             });
         }
 
+        if (newPassword.length > 20) {
+            return res.status(400).json({
+                success: false,
+                message: 'La nueva contraseña no puede tener más de 20 caracteres'
+            });
+        }
+
         await changePasswordDB(userId, currentPassword, newPassword);
         
         res.json({
@@ -105,9 +115,18 @@ export const changePassword = async (req, res) => {
             message: 'Contraseña actualizada correctamente'
         });
     } catch (error) {
+        // Manejar errores personalizados con sus códigos HTTP apropiados
+        if (error instanceof ValidationError || error instanceof AuthenticationError || error instanceof NotFoundError) {
+            return res.status(error.statusCode).json({
+                success: false,
+                message: error.message
+            });
+        }
+        
+        // Error de conexión a BD
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Error al cambiar la contraseña'
         });
     }
 };

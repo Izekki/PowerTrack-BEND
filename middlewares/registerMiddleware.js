@@ -4,7 +4,7 @@ export const validateRegister = (req, res, next) => {
     
     //console.log(req.body);
 
-    if (!nombre || !correo || !contraseña ) return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+    if (!nombre || !correo || !contraseña || !proveedor) return res.status(400).json({ message: 'Todos los campos son obligatorios' });
     
     let errors = [];
 
@@ -19,7 +19,7 @@ export const validateRegister = (req, res, next) => {
   };
 
   function validateName(name){
-    if(typeof nombre === 'string') return ["El nombre debe ser una cadena de texto"];
+    if(typeof name !== 'string') return ["El nombre debe ser una cadena de texto"];
     name = name.trim();
     if (name.length < 3) return ["El nombre debe tener al menos 3 caracteres"];
     if (name.length > 100) return ["El nombre no debe tener más de 100 caracteres"];
@@ -66,6 +66,7 @@ export const validateRegister = (req, res, next) => {
 
 
   function validateProveedor(proveedor){
-    if(isNaN(proveedor)) return ["El proveedor debe ser un numero"];
+    if(proveedor === undefined || proveedor === null || proveedor === '') return ["El proveedor es obligatorio"];
+    if(isNaN(proveedor)) return ["El proveedor debe ser un número válido"];
    return [];
   }
