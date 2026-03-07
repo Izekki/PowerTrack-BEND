@@ -1,4 +1,4 @@
-import { userModel,getProfileByIdDB,updateProfileDB,changePasswordDB } from '../models/userModel.js';
+import { userModel,getProfileByIdDB,updateProfileDB,changePasswordDB,deleteUserDB } from '../models/userModel.js';
 import DBConnectionError from '../models/modelserror/DBConnectionError.js';
 import DBElementAlredyExists from '../models/modelserror/DBElementAlredyExists.js';
 import ValidationError from '../models/modelserror/ValidationError.js';
@@ -127,6 +127,60 @@ export const changePassword = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error al cambiar la contraseña'
+        });
+    }
+};
+
+export const deleteUser = async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { confirmacion } = req.body;
+
+        // Validar que el usuario solo pueda eliminar su propia cuenta
+        if (req.user.userId !== parseInt(userId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'No tienes permiso para eliminar esta cuenta'
+            });
+        }
+
+        // Validar que se proporcione el texto de confirmación
+        if (!confirmacion) {
+            return res.status(400).json({
+                success: false,
+                message: 'El texto de confirmación es requerido'
+            });
+        }
+
+        // Llamar a la función de eliminación
+        const result = await deleteUserDB(userId, confirmacion);
+
+        res.json({
+            success: true,
+            message: result.message
+        });
+    } catch (error) {
+        console.error('Error en deleteUser:', error);
+        
+        // Manejar errores personalizados con sus códigos HTTP apropiados
+        if (error instanceof ValidationError || error instanceof NotFoundError) {
+            return res.status(error.statusCode).json({
+                success: false,
+                message: error.message
+            });
+        }
+        
+        if (error instanceof DBConnectionError) {
+            return res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
+        
+        // Error de conexión a BD u otro error desconocido
+        return res.status(500).json({
+            success: false,
+            message: 'Error al eliminar la cuenta: ' + (error.message || 'Error desconocido')
         });
     }
 };
