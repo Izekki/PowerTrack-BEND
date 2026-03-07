@@ -23,6 +23,7 @@ import electricalRouter  from './routes/ElectricalAnalysisRouter.js';
 import alertRouter from './routes/alertRouter.js';
 import savingsSettingsRouter from './routes/savingsSettingsRouter.js'
 import dashboardLayoutRouter from './routes/dashboardLayoutRouter.js';
+import preferencesRouter from './routes/preferencesRouter.js';
 
 //import cookieParser from 'cookie-parser'
 
@@ -54,6 +55,7 @@ app.use('/sensor',sensorRouter);
 app.use('/electrical_analysis', electricalRouter);
 app.use('/alertas',alertRouter);
 app.use('/savsetting',savingsSettingsRouter);
+app.use('/preferences', preferencesRouter);
 
 // Ruta 404
 app.use((req, res) => {
