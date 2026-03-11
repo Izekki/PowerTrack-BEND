@@ -7,7 +7,7 @@ const router = express.Router();
 const eac = new ElectricalAnalysisController(); 
 
 // GET /electrical_analysis/ - API info
-router.get('/', eac.getInfoApi);
+router.get('/', authenticate, eac.getInfoApi);
 
 // GET /electrical_analysis/voltaje_d/:id - Obtener voltaje de dispositivo (requiere autenticación)
 router.get('/voltaje_d/:id', authenticate, eac.getVoltaje);

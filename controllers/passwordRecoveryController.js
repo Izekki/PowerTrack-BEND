@@ -6,9 +6,7 @@ import {
   } from '../models/passwordRecoveryModel.js'
   import { sendMail } from '../utils/mailService.js';
   import dotenv from 'dotenv';
-  import NotFoundError from '../models/modelserror/NotFoundError.js';
   import ValidationError from '../models/modelserror/ValidationError.js';
-  import DBConnectionError from '../models/modelserror/DBConnectionError.js';
 
   dotenv.config();
   
@@ -26,11 +24,18 @@ import {
   
       const recoveryData = await createPasswordRecoveryRequest(correo);
 
-      const frontendUrl = (process.env.URL_FRONT || process.env.FRONT_URL || req.headers.origin || '').trim();
+      if (!recoveryData) {
+        return res.json({
+          success: true,
+          message: 'Si el correo esta registrado, recibiras las instrucciones en breve'
+        });
+      }
+
+      const frontendUrl = (process.env.URL_FRONT || process.env.FRONT_URL || '').trim();
       if (!frontendUrl) {
         return res.status(500).json({
           success: false,
-          message: 'URL de frontend no configurada para enviar el enlace de recuperacion'
+          message: 'Error de configuracion del servidor'
         });
       }
 
@@ -43,14 +48,14 @@ import {
         text: `Hola ${recoveryData.usuario.nombre},\n\n` +
           `Has solicitado restablecer tu contraseña. Usa este enlace para crear una nueva contraseña:\n` +
           `${resetLink}\n\n` +
-          `Este enlace expirará en 24 horas.\n` +
+          `Este enlace expirara en 1 hora.\n` +
           `Si no solicitaste este cambio, ignora este correo.`,
         html: `
           <h1>Recuperación de contraseña</h1>
           <p>Hola ${recoveryData.usuario.nombre},</p>
           <p>Has solicitado restablecer tu contraseña. Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
           <a href="${resetLink}">Restablecer contraseña</a>
-          <p>Este enlace expirará en 24 horas.</p>
+          <p>Este enlace expirara en 1 hora.</p>
           <p>Si no solicitaste este cambio, ignora este correo.</p>
         `
       });
@@ -60,14 +65,7 @@ import {
         message: 'Se ha enviado un correo con instrucciones para recuperar tu contraseña'
       });
     } catch (error) {
-      // Manejar usuario no encontrado
-      if (error instanceof NotFoundError) {
-        return res.status(404).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
+      console.error('Error al procesar solicitud de recuperacion:', error);
       res.status(500).json({
         success: false,
         message: 'Error al procesar solicitud de recuperación'
@@ -100,7 +98,8 @@ import {
           message: error.message
         });
       }
-      
+
+      console.error('Error al verificar token de recuperacion:', error);
       res.status(500).json({
         success: false,
         message: 'Error al verificar el token'
@@ -160,6 +159,7 @@ import {
         });
       }
 
+      console.error('Error al actualizar la contrasena:', error);
       res.status(500).json({
         success: false,
         message: 'Error al actualizar la contraseña'

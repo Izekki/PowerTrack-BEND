@@ -9,6 +9,15 @@ export const getAllSensors = async () => {
     }
 }
 
+export const getSensorsByUserId = async (userId) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM sensores WHERE usuario_id = ?', [userId]);
+    return rows;
+  } catch (error) {
+    throw new Error('Error al obtener sensores por usuario');
+  }
+}
+
 export const findSensorById = async (sensorId) => {
     try {
         const [rows] = await db.query('SELECT * FROM sensores WHERE id = ?', [sensorId]);

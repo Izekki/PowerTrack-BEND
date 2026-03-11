@@ -24,7 +24,7 @@ router.post('/:id/change-password', authenticate, authorizeByUserId('id'), chang
 router.delete('/:id', authenticate, authorizeByUserId('id'), deleteUser);
 
 // POST /user/reports/:idUsuario - Generar reporte de usuario (requiere autenticación)
-router.post('/reports/:idUsuario', authenticate, generateUserReport);
+router.post('/reports/:idUsuario', authenticate, authorizeByUserId('idUsuario'), generateUserReport);
 
 router.use((req, res) => {
   res.status(404).json({ 

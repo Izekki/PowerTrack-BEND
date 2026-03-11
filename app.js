@@ -1,7 +1,6 @@
 // Importar dependencias de express
 import express from 'express';
 import dotenv from 'dotenv';
-import { json } from 'express';
 import helmet from 'helmet';
 
 // Importar conexión a la base de datos
@@ -32,6 +31,11 @@ import contactRouter from './routes/contactRouter.js';
 dotenv.config();
 const port = 5051;
 
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET no esta definido. El servidor no puede arrancar.');
+  process.exit(1);
+}
+
 // Inicializar aplicación express
 export const app = express();
 
@@ -39,7 +43,7 @@ export const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(corsMiddleware());
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
 app.use(jsonErrorMiddleware);
 //app.use(cookieParser());
 //app.use(authenticate);

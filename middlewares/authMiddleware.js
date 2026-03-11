@@ -21,7 +21,7 @@ export const authenticate = (req, res, next) => {
         }
     
         // Verificar el token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_secreto_secreto');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         // Añadir el usuario decodificado a la request
         req.user = decoded;

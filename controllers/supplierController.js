@@ -5,7 +5,8 @@ export const getAllSuppliers = async (req, res) => {
         const suppliers = await SupplierModel.getSuppliers()
         res.status(200).json(suppliers);
     } catch (error) {
-        res.status(500).json({ message: 'Error al obtener los proveedores', error: error.message });
+        console.error('Error al obtener los proveedores:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
 
@@ -19,7 +20,8 @@ export const getSupplier = async (req, res) => {
         }
         res.status(200).json(supplier);
     } catch (error) {
-        res.status(500).json({ message: 'Error al obtener el proveedor', error: error.message });
+        console.error('Error al obtener el proveedor:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
 
@@ -48,7 +50,8 @@ export const registerSupplier = async (req, res) => {
         } });
         res.status(201).json({ message: "Proveedor creado exitosamente", supplier: newSupplier });
     } catch (error) {
-        res.status(500).json({ message: 'Error al registrar el proveedor', error: error.message });
+        console.error('Error al registrar el proveedor:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
 
@@ -67,7 +70,8 @@ export const updateSupplier = async (req, res) => {
         }
         res.status(200).json({ message: "Proveedor actualizado exitosamente", updatedSupplier });
     } catch (error) {
-        res.status(500).json({ message: 'Error al actualizar el proveedor', error: error.message });
+        console.error('Error al actualizar el proveedor:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
 
@@ -81,6 +85,7 @@ export const deleteSupplier = async (req, res) => {
         }
         res.status(200).json({ message: "Proveedor eliminado exitosamente" });
     } catch (error) {
-        res.status(500).json({ message: 'Error al eliminar el proveedor', error: error.message });
+        console.error('Error al eliminar el proveedor:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
