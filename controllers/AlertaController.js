@@ -24,9 +24,10 @@ class AlertaController {
       data: alertas 
     });
   } catch (error) {
+    console.error('Error al obtener alertas por usuario:', error);
     res.status(500).json({ 
       success: false,
-      error: error.message 
+      message: 'Error interno del servidor' 
     });
   }
 }
@@ -50,9 +51,10 @@ static async marcarLeidas(req, res) {
       message: 'Alertas marcadas como leídas' 
     });
   } catch (error) {
+    console.error('Error al marcar alertas como leídas:', error);
     res.status(500).json({ 
       success: false,
-      error: error.message 
+      message: 'Error interno del servidor' 
     });
   }
 }
@@ -77,9 +79,10 @@ static async verificarNuevas(req, res) {
       nuevas: hayNuevas 
     });
   } catch (error) {
+    console.error('Error al verificar alertas nuevas:', error);
     res.status(500).json({ 
       success: false,
-      error: error.message 
+      message: 'Error interno del servidor' 
     });
   }
 }
@@ -117,9 +120,10 @@ static async marcarUnaLeida(req, res) {
       message: 'Alerta marcada como leída' 
     });
   } catch (error) {
+    console.error('Error al marcar una alerta como leída:', error);
     res.status(500).json({ 
       success: false,
-      error: error.message 
+      message: 'Error interno del servidor' 
     });
   }
 }
@@ -146,9 +150,10 @@ static async marcarUnaLeida(req, res) {
         data: alertas 
       });
     } catch (error) {
+      console.error('Error al generar alertas por tipo de dispositivo:', error);
       res.status(500).json({ 
         success: false,
-        error: error.message 
+        message: 'Error interno del servidor' 
       });
     }
   }
@@ -173,9 +178,10 @@ static async marcarUnaLeida(req, res) {
         data: nuevaAlerta 
       });
     } catch (error) {
+      console.error('Error al crear alerta:', error);
       res.status(500).json({ 
         success: false,
-        error: error.message 
+        message: 'Error interno del servidor' 
       });
     }
   }
@@ -207,9 +213,10 @@ static async marcarUnaLeida(req, res) {
         });
       }
     } catch (error) {
+      console.error('Error al eliminar alerta:', error);
       res.status(500).json({ 
         success: false,
-        error: error.message 
+        message: 'Error interno del servidor' 
       });
     }
   }

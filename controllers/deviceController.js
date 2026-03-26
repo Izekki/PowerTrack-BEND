@@ -296,9 +296,10 @@ export const deleteDeviceFromId = async (req, res) => {
       data: result 
     });
   } catch (error) {
+    console.error('Error al eliminar dispositivo:', error);
     res.status(500).json({ 
       success: false,
-      error: error.message 
+      message: 'Error interno del servidor' 
     });
   }
 };

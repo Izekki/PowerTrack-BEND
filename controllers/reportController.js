@@ -138,9 +138,7 @@ const generateUserReport = async (req, res) => {
   } catch (error) {
     console.error('Error generando reporte:', error);
     return res.status(500).json({
-      message: 'Error generando el reporte',
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'Error generando el reporte'
     });
   }
 };
