@@ -3,7 +3,6 @@ import {db} from '../db/connection.js';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import DBConnectionError from './modelserror/DBConnectionError.js';
-import NotFoundError from './modelserror/NotFoundError.js';
 import ValidationError from './modelserror/ValidationError.js';
 
 // Función para generar un token de recuperación
@@ -21,13 +20,13 @@ export const createPasswordRecoveryRequest = async (email) => {
     );
 
     if (!user || user.length === 0) {
-      throw new NotFoundError('No existe un usuario con este correo electrónico');
+      return null;
     }
 
     const userId = user[0].id;
     const token = generateRecoveryToken();
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // Token válido por 24 horas
+    expiresAt.setMinutes(expiresAt.getMinutes() + 60); // Token válido por 1 hora
 
     // Eliminar cualquier solicitud previa para este usuario
     await db.query(
@@ -52,9 +51,6 @@ export const createPasswordRecoveryRequest = async (email) => {
       expira: expiresAt
     };
   } catch (error) {
-    if (error instanceof NotFoundError) {
-      throw error;
-    }
     throw new DBConnectionError('Error al crear solicitud de recuperación: ' + error.message);
   }
 };

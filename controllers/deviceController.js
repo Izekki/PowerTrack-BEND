@@ -1,5 +1,5 @@
 import { getDeviceByIdFromDB, updateDevice, 
-  createDevice, getAllDevices,getUnassignedDevicesFromDB, 
+  createDevice, getUnassignedDevicesFromDB, 
   getAllDeviceForUserFromDB,updateDeviceType,deleteDeviceFromIdDB,getConsumoLimitesPorTipoDispositivo } from '../models/deviceModel.js';
 import { findSensorByMac,createSensor,updateSensor } from '../models/sensorModel.js';
 import {insertConfiguracionAhorro,updateConfiguracionAhorroMinAndMax} from '../models/savingsSettinsModel.js'
@@ -60,10 +60,10 @@ export const editDevice = async (req, res) => {
     }
 
   } catch (error) {
+    console.error('Error al editar dispositivo:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Error interno del servidor', 
-      error 
+      message: 'Error interno del servidor'
     });
   }
 };
@@ -76,9 +76,17 @@ export const getDeviceById = async (req, res) => {
     const device = await getDeviceByIdFromDB(id);
     if (!device) return res.status(404).json({ message: 'Dispositivo no encontrado' });
 
+    if (device.usuario_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para ver este dispositivo'
+      });
+    }
+
     res.json(device);
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener el dispositivo', error });
+    console.error('Error al obtener el dispositivo:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
 }
 
@@ -163,8 +171,7 @@ export const addDevice = async (req, res) => {
     console.error(error);
     res.status(500).json({ 
       success: false,
-      message: 'Error al crear el dispositivo, sensor o configuración', 
-      error 
+      message: 'Error al crear el dispositivo, sensor o configuración'
     });
   } finally {
     if (connection) {
@@ -186,10 +193,11 @@ const updateSensorAssignment = async (sensorId, isAssigned) => {
 
 export const getDevices = async (req, res) => {
   try {
-    const devices = await getAllDevices();
-    res.status(200).json(devices);
+    const devices = await getAllDeviceForUserFromDB(req.user.userId);
+    res.status(200).json(Array.isArray(devices) ? devices : []);
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener los dispositivos', error });
+    console.error('Error al obtener los dispositivos:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
 };
 
@@ -199,8 +207,8 @@ export const getUnassignedDevices = async (req, res) => {
     const devices = await getUnassignedDevicesFromDB(id);
     res.status(200).json(devices);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error al obtener los dispositivos sin grupo', error });
+    console.error('Error al obtener los dispositivos sin grupo:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
 };
 
@@ -213,7 +221,7 @@ export const allDeviceForUser = async (req,res) => {
     res.json(Array.isArray(devices) ? devices : []);
   } catch (error) {
     console.error('Error al obtener dispositivos por usuario:', error);
-    res.status(500).json({ message: 'Error al obtener el dispositivo', error: error.message });
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
 }
 
@@ -288,9 +296,10 @@ export const deleteDeviceFromId = async (req, res) => {
       data: result 
     });
   } catch (error) {
+    console.error('Error al eliminar dispositivo:', error);
     res.status(500).json({ 
       success: false,
-      error: error.message 
+      message: 'Error interno del servidor' 
     });
   }
 };

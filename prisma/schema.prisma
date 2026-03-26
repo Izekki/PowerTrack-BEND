@@ -42,9 +42,23 @@ model Usuario {
   configs        ConfiguracionAhorro[]
   recuperaciones RecuperacionPassword[]
   reportes       Reporte[]
+  dashboardLayout DashboardLayout?
+  preferences    UserPreferences?
 
   @@index([id_proveedor], map: "id_proveedor")
   @@map("usuarios")
+}
+
+model UserPreferences {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique @map("usuario_id")
+  contrastLevel String   @default("normal") @map("nivel_contraste") @db.VarChar(20)
+  theme         String   @default("light") @db.VarChar(10)
+  createdAt     DateTime @default(now()) @map("creado_en") @db.Timestamp(0)
+  updatedAt     DateTime @updatedAt @map("actualizado_en") @db.Timestamp(0)
+  user          Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("preferencias_usuario")
 }
 
 model Grupo {
@@ -114,10 +128,11 @@ model Sensor {
   usuario_id        Int?
   dispositivo       Dispositivo? @relation("DispositivoSensor", fields: [dispositivo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "sensores_ibfk_1")
   mediciones        Medicion[]
-  usuario           Usuario?     @relation(fields: [usuario_id], references: [id])
+  usuario           Usuario?     @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([mac_address, usuario_id], map: "mac_address")
   @@index([dispositivo_id], map: "dispositivo_id")
+  @@index([usuario_id], map: "usuario_id")
   @@map("sensores")
 }
 
@@ -231,6 +246,8 @@ model DashboardLayout {
   usuario_id   Int      @unique
   layout_json  String   @db.LongText
   updated_at   DateTime @default(now()) @db.Timestamp(0)
+  usuario      Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([usuario_id], map: "usuario_id")
   @@map("dashboard_layouts")
 }

@@ -2,7 +2,7 @@ import express from 'express';
 import { validateRegister } from '../middlewares/registerMiddleware.js';
 import { authenticate, authorizeByUserId } from '../middlewares/authMiddleware.js'
 import generateUserReport from '../controllers/reportController.js';
-import { userController,getProfileById,updateProfile,changePassword } from '../controllers/userController.js';
+import { userController,getProfileById,updateProfile,changePassword,deleteUser } from '../controllers/userController.js';
 
 const router = express.Router();
 
@@ -20,8 +20,11 @@ router.put('/edit/:id', authenticate, authorizeByUserId('id'), updateProfile);
 // POST /user/:id/change-password - ALTO: Cambiar contraseña (requiere autenticación y validación)
 router.post('/:id/change-password', authenticate, authorizeByUserId('id'), changePassword);
 
+// DELETE /user/:id - ALTO: Eliminar usuario (requiere autenticación y confirmación)
+router.delete('/:id', authenticate, authorizeByUserId('id'), deleteUser);
+
 // POST /user/reports/:idUsuario - Generar reporte de usuario (requiere autenticación)
-router.post('/reports/:idUsuario', authenticate, generateUserReport);
+router.post('/reports/:idUsuario', authenticate, authorizeByUserId('idUsuario'), generateUserReport);
 
 router.use((req, res) => {
   res.status(404).json({ 

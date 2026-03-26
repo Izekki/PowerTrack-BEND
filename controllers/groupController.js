@@ -58,7 +58,8 @@ export const getAllGroups = async (req, res) => {
         const groups = await getGroups();
         res.status(200).json(groups);
     } catch (error) {
-        res.status(500).json({ message: 'Error al obtener los grupos', error: error.message });
+        console.error('Error al obtener los grupos:', error);
+        res.status(500).json({ message: 'Error al obtener los grupos' });
     }
 };
 
@@ -82,10 +83,10 @@ export const editGroup = async (req,res) => {
             group
         });
     }catch(error){
+        console.error('Error al editar el grupo:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al editar el grupo', 
-            error: error.message
+            message: 'Error al editar el grupo'
         });
     }
     
@@ -108,9 +109,9 @@ export const allGroupsForUser = async (req, res) => {
         res.status(200).json(Array.isArray(groups) ? groups : []);
 
     } catch (error) {
+        console.error('Error al obtener los grupos para el usuario:', error);
         res.status(500).json({
-            message: "Error al obtener los grupos para el usuario",
-            error: error.message,
+            message: "Error al obtener los grupos para el usuario"
         });
     }
 };
@@ -123,7 +124,8 @@ export const getGroupDevices = async (req, res) => {
       const dispositivos = await getGroupDevicesBD(grupoId, usuarioId);
       res.json(dispositivos);
     } catch (error) {
-      res.status(500).json({ message: 'Error al obtener dispositivos del grupo', error: error.message });
+            console.error('Error al obtener dispositivos del grupo:', error);
+            res.status(500).json({ message: 'Error al obtener dispositivos del grupo' });
     }
   };
 
@@ -165,9 +167,10 @@ export const getGroupDevices = async (req, res) => {
         data: result 
       });
     } catch (error) {
+            console.error('Error al eliminar grupo:', error);
       res.status(500).json({ 
         success: false,
-        error: error.message 
+                message: 'Error interno del servidor' 
       });
     }
   };

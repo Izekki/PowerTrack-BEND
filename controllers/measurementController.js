@@ -2,8 +2,16 @@ import { findSensorByMac } from "../models/sensorModel.js";
 import { saveMeasurement } from "../models/measurementModel.js";
 import AlertModel from "../models/alertModel.js";
 
+const LIMITES_MEDICION = {
+  voltaje: { min: 0, max: 300 },
+  corriente: { min: 0, max: 100 },
+  potencia: { min: 0, max: 20000 },
+  factor_potencia: { min: 0, max: 1 },
+  energia: { min: 0, max: 1e9 },
+  frecuencia: { min: 45, max: 65 }
+};
+
 export const createMeasurement = async (req, res) => {
-  console.log(req.body);
   try {
     const {
       mac_address,
@@ -34,30 +42,38 @@ export const createMeasurement = async (req, res) => {
       return res.status(404).json({ message: "Sensor no encontrado" });
     }
 
-    console.log("sensor.id:", sensor.id); // ✅ Asegúrate que sea número
-    console.log("potencia:", potencia); 
+    if (sensor.usuario_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para registrar mediciones para este sensor'
+      });
+    }
+
+    for (const [campo, { min, max }] of Object.entries(LIMITES_MEDICION)) {
+      const valor = Number(req.body[campo]);
+      if (Number.isNaN(valor) || valor < min || valor > max) {
+        return res.status(400).json({ message: `Valor fuera de rango: ${campo}` });
+      }
+    }
+
+    const measurementDate = new Date(timestamp);
+    if (Number.isNaN(measurementDate.getTime())) {
+      return res.status(400).json({ message: 'Timestamp invalido' });
+    }
 
     // Guardar la medición
     await saveMeasurement(
       sensor.id,
-      voltaje,
-      corriente,
-      potencia,
-      factor_potencia,
-      energia,
-      frecuencia,
-      new Date(timestamp)
+      Number(voltaje),
+      Number(corriente),
+      Number(potencia),
+      Number(factor_potencia),
+      Number(energia),
+      Number(frecuencia),
+      measurementDate
     );
 
-    // Calcular consumo en kWh (5 minutos por medición)
-    const consumoMedicionKWh = (potencia / 1000) * (5/60);
-    // Verificar alertas (no bloqueante)
-
-    console.log("Llamando a verificarAlertasPorConsumo con:");
-    console.log("sensor.id:", sensor.id);
-    console.log("potencia:", potencia);
-
-    AlertModel.verificarAlertasPorConsumo(sensor.id, potencia)
+    AlertModel.verificarAlertasPorConsumo(sensor.id, Number(potencia))
       .catch(e => console.error('Error en verificación de alertas:', e));
 
     res.status(201).json({ message: "Medición guardada correctamente" });

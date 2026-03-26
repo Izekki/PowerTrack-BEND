@@ -160,6 +160,9 @@ EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=tu_correo@gmail.com
 EMAIL_PASS=tu_contraseña_aplicacion
+
+# Contacto (opcional, por defecto: powertrack2025@gmail.com)
+CONTACT_SUPPORT_EMAIL=powertrack2025@gmail.com
 ```
 
 ### Inicialización de Base de Datos
@@ -256,6 +259,47 @@ node utils/simulator.js
 - `GET /savsetting/:idUsuario` - Obtener configuración de ahorros
 - `POST /savsetting` - Crear configuración
 - `PUT /savsetting/:id` - Actualizar configuración
+
+### Contacto
+
+- `POST /contacto` - Enviar mensaje de contacto al soporte
+
+#### Request de ejemplo
+
+```json
+{
+   "fullName": "Nombre Apellido",
+   "email": "usuario@dominio.com",
+   "subject": "Asunto del mensaje",
+   "message": "Contenido del mensaje"
+}
+```
+
+#### Responses
+
+- `200`
+
+```json
+{ "success": true, "message": "Mensaje enviado correctamente" }
+```
+
+- `400`
+
+```json
+{ "success": false, "message": "Datos invalidos" }
+```
+
+- `429`
+
+```json
+{ "success": false, "message": "Demasiadas solicitudes, intenta mas tarde" }
+```
+
+- `500`
+
+```json
+{ "success": false, "message": "No fue posible enviar el mensaje" }
+```
 
 ---
 

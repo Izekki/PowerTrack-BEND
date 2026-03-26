@@ -272,3 +272,59 @@ export const changePasswordDB = async (userId, currentPassword, newPassword) => 
         connection.release();
     }
 };
+
+export const deleteUserDB = async (userId, confirmationText) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Validar que el texto de confirmación sea "Confirmar"
+        if (confirmationText !== 'Confirmar') {
+            throw new ValidationError('Texto de confirmación incorrecto. Debe escribir exactamente "Confirmar"');
+        }
+
+        // 2. Verificar que el usuario existe
+        const [user] = await connection.query(
+            `SELECT id, correo FROM usuarios WHERE id = ?`,
+            [userId]
+        );
+
+        if (!user || user.length === 0) {
+            throw new NotFoundError('Usuario no encontrado');
+        }
+
+        const userEmail = user[0].correo;
+
+        // 3. Eliminar el usuario (las relaciones en cascada se eliminan automáticamente)
+        await connection.query(
+            `DELETE FROM usuarios WHERE id = ?`,
+            [userId]
+        );
+
+        await connection.commit();
+        return {
+            success: true,
+            message: 'Usuario eliminado permanentemente',
+            deletedEmail: userEmail
+        };
+
+    } catch (error) {
+        await connection.rollback();
+        
+        console.error('Error en deleteUserDB:', error);
+        
+        // Re-lanzar errores personalizados sin envolverlos
+        if (error instanceof ValidationError || error instanceof NotFoundError) {
+            throw error;
+        }
+        
+        // Error de constraint de foreign key
+        if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+            throw new DBConnectionError('No se puede eliminar el usuario porque tiene datos relacionados. Contacta al soporte.');
+        }
+        
+        throw new DBConnectionError('Error al eliminar el usuario: ' + error.message);
+    } finally {
+        connection.release();
+    }
+};

@@ -1,5 +1,6 @@
 import ElectricalAnalysisModel from "../models/ElectricalAnalysisModel.js";
 import {getAllDeviceForUserFromDB,getDeviceByIdFromDB} from "../models/deviceModel.js";
+import { findSensorById } from "../models/sensorModel.js";
 
 class ElectricalAnalysisController {
 
@@ -57,6 +58,14 @@ class ElectricalAnalysisController {
     res.status(200).json({'message': 'Metodos de la API', 'metodos': this.apiMethodsInfo });
   }
 
+  handleInternalError(res, context, message, error) {
+    console.error(context, error);
+    return res.status(500).json({
+      success: false,
+      message,
+    });
+  }
+
   getVoltaje = async (req, res) => {
 
     const { id } = req.params;
@@ -76,9 +85,7 @@ class ElectricalAnalysisController {
       );
       res.status(200).json(datos);
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error al obtener el voltaje", error: error.message });
+      return this.handleInternalError(res, "Error al obtener el voltaje:", "Error al obtener el voltaje", error);
     }
   };
 
@@ -99,12 +106,7 @@ class ElectricalAnalysisController {
       );
       res.status(200).json(datos);
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: "Error al obtener la corriente",
-          error: error.message,
-        });
+      return this.handleInternalError(res, "Error al obtener la corriente:", "Error al obtener la corriente", error);
     }
   };
 
@@ -125,12 +127,7 @@ class ElectricalAnalysisController {
       );
       res.status(200).json(datos);
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: "Error al obtener la potencia activa",
-          error: error.message,
-        });
+      return this.handleInternalError(res, "Error al obtener la potencia activa:", "Error al obtener la potencia activa", error);
     }
   };
 
@@ -151,12 +148,7 @@ class ElectricalAnalysisController {
       );
       res.status(200).json(datos);
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: "Error al obtener la frecuencia",
-          error: error.message,
-        });
+      return this.handleInternalError(res, "Error al obtener la frecuencia:", "Error al obtener la frecuencia", error);
     }
   };
 
@@ -177,12 +169,7 @@ class ElectricalAnalysisController {
       );
       res.status(200).json(datos);
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: "Error al obtener el factor de potencia",
-          error: error.message,
-        });
+      return this.handleInternalError(res, "Error al obtener el factor de potencia:", "Error al obtener el factor de potencia", error);
     }
   };
 
@@ -207,9 +194,7 @@ class ElectricalAnalysisController {
       );
       res.status(200).json(datos);
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error al obtener el consumo", error: error.message });
+      return this.handleInternalError(res, "Error al obtener el consumo:", "Error al obtener el consumo", error);
     }
   };
 
@@ -222,12 +207,23 @@ class ElectricalAnalysisController {
     }
   
     try {
-      const datos = await this.electricalAnalysisModel.getConsumoActual(id);
-      res.status(200).json(datos);
+      const dispositivo = await getDeviceByIdFromDB(id);
+
+      if (!dispositivo) {
+        return res.status(404).json({ message: "Dispositivo no encontrado" });
+      }
+
+      if (dispositivo.usuario_id !== req.user.userId) {
+        return res.status(403).json({
+          success: false,
+          message: "No tienes permiso para ver este dispositivo",
+        });
+      }
+
+      const datos = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
+      return res.status(200).json(datos);
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error al obtener el consumo actual", error: error.message });
+      return this.handleInternalError(res, "Error al obtener el consumo actual:", "Error al obtener el consumo actual", error);
     }
   };
 
@@ -239,11 +235,24 @@ class ElectricalAnalysisController {
     if (!idSensor) {
       return res.status(400).json({ error: 'Falta el parámetro idSensor' });
     }
+
+    const sensor = await findSensorById(idSensor);
+
+    if (!sensor) {
+      return res.status(404).json({ message: 'Sensor no encontrado' });
+    }
+
+    if (sensor.usuario_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para consultar este sensor'
+      });
+    }
+
     const resultado = await this.electricalAnalysisModel.getConsumoPorRango(idSensor, fechaInicio, fechaFin);
-    res.json(resultado);
+    return res.json(resultado);
   } catch (error) {
-    console.error('Error en consumoPorRangoController:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    return this.handleInternalError(res, 'Error en consumoPorRangoController:', 'Error interno del servidor', error);
   }
 };
 
@@ -303,11 +312,7 @@ class ElectricalAnalysisController {
     return res.status(200).json(resultados);
 
   } catch (error) {
-    console.error("Error al obtener dispositivos con el consumo:", error);
-    return res.status(500).json({ 
-      message: "Error al obtener dispositivos con el consumo", 
-      error: error.message 
-    });
+    return this.handleInternalError(res, "Error al obtener dispositivos con el consumo:", "Error al obtener dispositivos con el consumo", error);
   }
 };
 
@@ -322,6 +327,13 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
     const dispositivo = await getDeviceByIdFromDB(id);
     if (!dispositivo) {
       return res.status(404).json({ message: "Dispositivo no encontrado." });
+    }
+
+    if (dispositivo.usuario_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para ver el consumo de este dispositivo'
+      });
     }
 
     const datosConsumo = await this.electricalAnalysisModel.getConsumoActual(dispositivo.id_sensor);
@@ -359,11 +371,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
     return res.status(200).json(response);
 
   } catch (error) {
-    console.error("Error al obtener el consumo detallado:", error);
-    return res.status(500).json({
-      message: "Error al obtener el consumo detallado del dispositivo.",
-      error: error.message,
-    });
+    return this.handleInternalError(res, "Error al obtener el consumo detallado:", "Error al obtener el consumo detallado del dispositivo.", error);
   }
 };
 
@@ -379,10 +387,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
     const datos = await this.electricalAnalysisModel.getConsumoPorDispositivosYGruposPorUsuario(id);
     res.status(200).json(datos);
   } catch (error) {
-    res.status(500).json({
-      mensaje: 'Error al obtener el consumo por dispositivos y grupos del usuario',
-      error: error.message,
-    });
+    return this.handleInternalError(res, 'Error al obtener el consumo por dispositivos y grupos del usuario:', 'Error al obtener el consumo por dispositivos y grupos del usuario', error);
   }
 };
 
@@ -403,11 +408,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
 
     res.status(200).json(datos);
   } catch (error) {
-    console.error("Error en controller:", error); // Es bueno tener un log aquí
-    res.status(500).json({
-      mensaje: 'Error al obtener el consumo por dispositivos y grupos del usuario',
-      error: error.message,
-    });
+    return this.handleInternalError(res, 'Error en controller:', 'Error al obtener el consumo por dispositivos y grupos del usuario', error);
   }
 };
 
@@ -424,11 +425,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
 
     res.status(200).json(datos);
   } catch (error) {
-    console.error("Error en controller (real):", error);
-    res.status(500).json({
-      mensaje: "Error al obtener el consumo real y proyectado del usuario",
-      error: error.message,
-    });
+    return this.handleInternalError(res, 'Error en controller (real):', 'Error al obtener el consumo real y proyectado del usuario', error);
   }
 };
 
@@ -521,8 +518,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
       const datos = await this.electricalAnalysisModel.getHistorialConsumo(idUsuario);
       return res.status(200).json(datos);
     } catch (error) {
-      console.error("Error en getHistorialConsumo:", error);
-      return res.status(500).json({ message: "Error al obtener historial de consumo", error: error.message });
+      return this.handleInternalError(res, 'Error en getHistorialConsumo:', 'Error al obtener historial de consumo', error);
     }
   };
 
@@ -537,8 +533,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
     const datos = await this.electricalAnalysisModel.getHistorialResumenPorRango(idUsuario);
     return res.status(200).json(datos);
   } catch (error) {
-    console.error("Error en getHistorialResumenPorRango:", error);
-    return res.status(500).json({ message: "Error al obtener resumen de consumo", error: error.message });
+    return this.handleInternalError(res, 'Error en getHistorialResumenPorRango:', 'Error al obtener resumen de consumo', error);
   }
   };
 /*
@@ -554,7 +549,7 @@ getConsumoDetalladoPorDispositivo = async (req, res) => {
       return res.status(200).json(datos);
     } catch (error) {
       console.error("Error en getHistorialDetalladoPorRango:", error);
-      return res.status(500).json({ message: "Error al obtener historial detallado", error: error.message });
+      return res.status(500).json({ message: "Error al obtener historial detallado" });
     }
   };
 */
@@ -578,8 +573,7 @@ getHistorialDetalladoPorRango = async (req, res) => {
       );
       return res.status(200).json(datos);
     } catch (error) {
-      console.error("Error en getHistorialDetalladoPorRango:", error);
-      return res.status(500).json({ message: "Error al obtener historial detallado", error: error.message });
+      return this.handleInternalError(res, 'Error en getHistorialDetalladoPorRango:', 'Error al obtener historial detallado', error);
     }
   };
 
