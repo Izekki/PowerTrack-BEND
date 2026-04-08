@@ -41,16 +41,32 @@ const pool = mysql.createPool({
 });
 
 let cachedToken = null;
+let cachedTokenExpiresAt = 0;
+let authTokenPromise = null;
+let nextAuthRetryAt = 0;
 
-async function getAuthToken() {
-  if (process.env.SIMULATOR_TOKEN) {
-    return process.env.SIMULATOR_TOKEN;
+const TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
+const AUTH_RETRY_COOLDOWN_MS = 60 * 1000;
+
+function decodeJwtExpirationMs(token) {
+  try {
+    const payloadBase64 = token.split('.')[1];
+    if (!payloadBase64) return 0;
+    const payloadJson = Buffer.from(payloadBase64, 'base64url').toString('utf8');
+    const payload = JSON.parse(payloadJson);
+    return payload?.exp ? payload.exp * 1000 : 0;
+  } catch {
+    return 0;
   }
+}
 
-  if (cachedToken) {
-    return cachedToken;
-  }
+function isCachedTokenValid() {
+  if (!cachedToken) return false;
+  if (!cachedTokenExpiresAt) return true;
+  return Date.now() < (cachedTokenExpiresAt - TOKEN_EXPIRY_SKEW_MS);
+}
 
+async function requestNewAuthToken() {
   const email = process.env.SIMULATOR_EMAIL;
   const password = process.env.SIMULATOR_PASSWORD;
 
@@ -70,7 +86,39 @@ async function getAuthToken() {
   }
 
   cachedToken = token;
+  cachedTokenExpiresAt = decodeJwtExpirationMs(token);
   return cachedToken;
+}
+
+async function getAuthToken({ forceRefresh = false } = {}) {
+  if (process.env.SIMULATOR_TOKEN) {
+    return process.env.SIMULATOR_TOKEN;
+  }
+
+  if (!forceRefresh && isCachedTokenValid()) {
+    return cachedToken;
+  }
+
+  if (Date.now() < nextAuthRetryAt) {
+    throw new Error('Reintento de login del simulador en espera para evitar rate limit');
+  }
+
+  if (!authTokenPromise) {
+    authTokenPromise = requestNewAuthToken()
+      .then((token) => {
+        nextAuthRetryAt = 0;
+        return token;
+      })
+      .catch((error) => {
+        nextAuthRetryAt = Date.now() + AUTH_RETRY_COOLDOWN_MS;
+        throw error;
+      })
+      .finally(() => {
+        authTokenPromise = null;
+      });
+  }
+
+  return authTokenPromise;
 }
 
 async function getSensoresUsuario24() {
@@ -167,8 +215,9 @@ async function enviarMedicion(mac, medicion, nombre) {
   } catch (error) {
     if (error?.response?.status === 401) {
       cachedToken = null;
+      cachedTokenExpiresAt = 0;
       try {
-        const token = await getAuthToken();
+        const token = await getAuthToken({ forceRefresh: true });
         await axios.post(
           CONFIG.API_URL,
           { mac_address: mac, ...medicion },
