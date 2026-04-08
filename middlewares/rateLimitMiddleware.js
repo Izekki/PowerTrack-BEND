@@ -11,7 +11,17 @@ const buildRateLimiter = (max, windowMs) => rateLimit({
   },
 });
 
-export const loginRateLimit = buildRateLimiter(5, 15 * 60 * 1000);
+export const loginRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: {
+    success: false,
+    message: 'Demasiadas solicitudes. Intenta nuevamente más tarde.',
+  },
+});
 
 export const passwordRecoveryRequestRateLimit = buildRateLimiter(3, 15 * 60 * 1000);
 
