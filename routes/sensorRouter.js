@@ -1,7 +1,7 @@
 import express from 'express';
 import { getSensors,getSensorById, verifySensor } from '../controllers/sensorController.js';
 import { createMeasurement } from '../controllers/measurementController.js';
-import { authenticate } from '../middlewares/authMiddleware.js';
+import { authenticate, authenticateUserOrSensorIngest } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.get('/byId/:id', authenticate, getSensorById);
 // POST /sensor/verify - Verificar sensor (requiere autenticación)
 router.post('/verify', authenticate, verifySensor);
 
-// POST /sensor/measurements - Crear medición (requiere autenticación)
-router.post('/measurements', authenticate, createMeasurement);
+// POST /sensor/measurements - Crear medición (JWT de usuario o token de ingesta de sensor)
+router.post('/measurements', authenticateUserOrSensorIngest, createMeasurement);
 
 export default router;

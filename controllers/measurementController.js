@@ -42,10 +42,24 @@ export const createMeasurement = async (req, res) => {
       return res.status(404).json({ message: "Sensor no encontrado" });
     }
 
-    if (sensor.usuario_id !== req.user.userId) {
-      return res.status(403).json({
+    if (req.user) {
+      if (sensor.usuario_id !== req.user.userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'No tienes permiso para registrar mediciones para este sensor'
+        });
+      }
+    } else if (req.sensorIngest) {
+      if (!sensor.asignado || !sensor.usuario_id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Sensor no asignado o invalido para ingesta'
+        });
+      }
+    } else {
+      return res.status(401).json({
         success: false,
-        message: 'No tienes permiso para registrar mediciones para este sensor'
+        message: 'Acceso no autorizado para registrar mediciones'
       });
     }
 

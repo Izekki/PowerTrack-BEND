@@ -1,7 +1,7 @@
 import express from 'express';
 import ElectricalAnalysisController from '../controllers/ElectricalAnalysisController.js';
 import { createMeasurement } from '../controllers/measurementController.js';
-import { authenticate, authorizeByUserId } from '../middlewares/authMiddleware.js';
+import { authenticate, authorizeByUserId, authenticateUserOrSensorIngest } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 const eac = new ElectricalAnalysisController(); 
@@ -54,8 +54,8 @@ router.get("/historial_detallado/:idUsuario", authenticate, authorizeByUserId('i
 // GET /electrical_analysis/dispositivo/:idSensor/consumo-actual-por-rango - Consumo por rango (requiere autenticación)
 router.get('/dispositivo/:idSensor/consumo-actual-por-rango', authenticate, eac.getConsumoPorRango);
 
-// POST /electrical_analysis/mediciones/guardar - Guardar mediciones (requiere autenticación)
-router.post('/mediciones/guardar', authenticate, createMeasurement);
+// POST /electrical_analysis/mediciones/guardar - Guardar mediciones (JWT de usuario o token de ingesta de sensor)
+router.post('/mediciones/guardar', authenticateUserOrSensorIngest, createMeasurement);
 
 // Opcional: Solo mostrar error 404 para rutas no encontradas
 router.use((req, res) => {

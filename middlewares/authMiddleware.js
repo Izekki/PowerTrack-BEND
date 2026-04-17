@@ -70,3 +70,53 @@ export const authorizeByUserId = (paramName = 'id') => {
     }
   };
 };
+
+/**
+ * Middleware híbrido para endpoints de ingesta de sensores.
+ * Acepta:
+ * 1) JWT de usuario (flujo normal app/web)
+ * 2) Token de gateway/sensor (flujo dispositivo -> backend)
+ */
+export const authenticateUserOrSensorIngest = (req, res, next) => {
+  const authorizationHeader = req.header('Authorization');
+  const bearerToken = authorizationHeader?.replace('Bearer ', '');
+
+  // 1) Intentar autenticación JWT de usuario si viene un Bearer token
+  if (bearerToken) {
+    try {
+      const decoded = jwt.verify(bearerToken, process.env.JWT_SECRET);
+      req.user = decoded;
+      return next();
+    } catch (_) {
+      // Si no es JWT válido, seguimos para intentar token de ingesta
+    }
+  }
+
+  // 2) Validar token de ingesta por header dedicado o por Bearer
+  const ingestToken = req.header('x-sensor-token') || bearerToken;
+  const expectedIngestToken = process.env.SENSOR_INGEST_TOKEN;
+
+  if (!expectedIngestToken) {
+    return res.status(500).json({
+      success: false,
+      message: 'SENSOR_INGEST_TOKEN no configurado en el servidor.'
+    });
+  }
+
+  if (!ingestToken) {
+    return res.status(401).json({
+      success: false,
+      message: 'Token no proporcionado. Acceso no autorizado.'
+    });
+  }
+
+  if (ingestToken !== expectedIngestToken) {
+    return res.status(401).json({
+      success: false,
+      message: 'Token inválido o expirado'
+    });
+  }
+
+  req.sensorIngest = true;
+  return next();
+};
