@@ -2,7 +2,8 @@
 import {db} from '../db/connection.js';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import  DBConnectionError  from './modelserror/DBConnectionError.js';
+import DBConnectionError from './modelserror/DBConnectionError.js';
+import ValidationError from './modelserror/ValidationError.js';
 
 // Función para generar un token de recuperación
 const generateRecoveryToken = () => {
@@ -19,13 +20,13 @@ export const createPasswordRecoveryRequest = async (email) => {
     );
 
     if (!user || user.length === 0) {
-      throw new Error('No existe un usuario con este correo electrónico');
+      return null;
     }
 
     const userId = user[0].id;
     const token = generateRecoveryToken();
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // Token válido por 24 horas
+    expiresAt.setMinutes(expiresAt.getMinutes() + 60); // Token válido por 1 hora
 
     // Eliminar cualquier solicitud previa para este usuario
     await db.query(
@@ -66,7 +67,7 @@ export const verifyRecoveryToken = async (token) => {
     );
 
     if (!result || result.length === 0) {
-      throw new Error('Token inválido');
+      throw new ValidationError('Token inválido o expirado');
     }
 
     const recovery = result[0];
@@ -74,7 +75,7 @@ export const verifyRecoveryToken = async (token) => {
     const expiresAt = new Date(recovery.fecha_expiracion);
 
     if (now > expiresAt) {
-      throw new Error('El token ha expirado');
+      throw new ValidationError('El token ha expirado. Por favor solicita uno nuevo');
     }
 
     return {
@@ -86,6 +87,9 @@ export const verifyRecoveryToken = async (token) => {
       }
     };
   } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
     throw new DBConnectionError('Error al verificar token: ' + error.message);
   }
 };

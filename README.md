@@ -160,6 +160,9 @@ EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=tu_correo@gmail.com
 EMAIL_PASS=tu_contraseña_aplicacion
+
+# Contacto (opcional, por defecto: powertrack2025@gmail.com)
+CONTACT_SUPPORT_EMAIL=powertrack2025@gmail.com
 ```
 
 ### Inicialización de Base de Datos
@@ -257,6 +260,47 @@ node utils/simulator.js
 - `POST /savsetting` - Crear configuración
 - `PUT /savsetting/:id` - Actualizar configuración
 
+### Contacto
+
+- `POST /contacto` - Enviar mensaje de contacto al soporte
+
+#### Request de ejemplo
+
+```json
+{
+   "fullName": "Nombre Apellido",
+   "email": "usuario@dominio.com",
+   "subject": "Asunto del mensaje",
+   "message": "Contenido del mensaje"
+}
+```
+
+#### Responses
+
+- `200`
+
+```json
+{ "success": true, "message": "Mensaje enviado correctamente" }
+```
+
+- `400`
+
+```json
+{ "success": false, "message": "Datos invalidos" }
+```
+
+- `429`
+
+```json
+{ "success": false, "message": "Demasiadas solicitudes, intenta mas tarde" }
+```
+
+- `500`
+
+```json
+{ "success": false, "message": "No fue posible enviar el mensaje" }
+```
+
 ---
 
 ## Seguridad
@@ -323,3 +367,50 @@ Maestría en Ingeniería de Software
 ## Contacto
 
 Para consultas académicas o técnicas sobre este proyecto, contactar a través de los repositorios de GitHub de los colaboradores.
+
+## Migraciones con Prisma
+
+Se añadió Prisma para gestionar el esquema de la base de datos MySQL y generar una primera migración basada en el estado actual del código.
+
+### Requisitos
+
+- Node.js 18+
+- Base de datos MySQL accesible
+- Archivo `.env` con credenciales actuales ya existentes (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+
+Además, Prisma requiere `DATABASE_URL`. Puedes definirla a partir de tus variables existentes:
+
+```
+DATABASE_URL="mysql://<DB_USER>:<DB_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>"
+```
+
+Ejemplo:
+
+```
+DATABASE_URL="mysql://root:password@localhost:3306/powertrack"
+```
+
+### Scripts disponibles
+
+- `npm run prisma:generate`: Genera el cliente de Prisma.
+- `npm run prisma:migrate:dev`: Crea y aplica la migración en entorno de desarrollo (nombre: `init`).
+- `npm run prisma:migrate:deploy`: Aplica migraciones pendientes (producción/CI).
+- `npm run prisma:studio`: Abre Prisma Studio para explorar datos.
+
+### Pasos sugeridos (primera vez)
+
+1. Instalar dependencias:
+   ```
+   npm install
+   ```
+2. Asegurarte de tener `DATABASE_URL` en `.env` (ver arriba).
+3. Generar la migración inicial y aplicarla en tu BD de desarrollo:
+   ```
+   npm run prisma:migrate:dev
+   ```
+4. (Opcional) Abrir Prisma Studio:
+   ```
+   npm run prisma:studio
+   ```
+
+El archivo del esquema está en `prisma/schema.prisma` y contiene los modelos inferidos del código actual: usuarios, proveedores, dispositivos, sensores, mediciones, grupos, relaciones de agrupación, alertas, tipos de alerta y tipos de dispositivos, configuración de ahorro y recuperación de contraseña.

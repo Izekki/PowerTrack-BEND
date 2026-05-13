@@ -131,3 +131,6 @@ dist
 
 #dotenv
 .env
+
+# Markdown files
+*.md

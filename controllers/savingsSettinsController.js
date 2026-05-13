@@ -19,7 +19,7 @@ export const createConfiguracion = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al crear configuración:', error);
-    res.status(500).json({ message: 'Error al crear configuración', error });
+    res.status(500).json({ message: 'Error al crear configuración' });
   }
 };
 
@@ -37,7 +37,7 @@ export const getConfiguracionByDevice = async (req, res) => {
     res.status(200).json(rows[0]);
   } catch (error) {
     console.error('Error al obtener configuración:', error);
-    res.status(500).json({ message: 'Error al obtener configuración', error });
+    res.status(500).json({ message: 'Error al obtener configuración' });
   }
 };
 
@@ -56,7 +56,7 @@ export const updateConfiguracion = async (req, res) => {
     res.status(200).json({ message: 'Configuración actualizada exitosamente' });
   } catch (error) {
     console.error('Error al actualizar configuración:', error);
-    res.status(500).json({ message: 'Error al actualizar configuración', error });
+    res.status(500).json({ message: 'Error al actualizar configuración' });
   }
 };
 

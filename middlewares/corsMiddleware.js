@@ -6,7 +6,7 @@ const ACCEPTED_ORIGINS = [
     'http://localhost:5173', 'http://localhost:5174',
     'http://localhost:1235', 'http://localhost:5176',
     'https://powertrack.up.railway.app',
-    'https://powertrack.petruccini.com' // 👈 agrega esto
+    'https://powertrack.petruccini.com'
 ]
 
 export const corsMiddleware = ({ acceptedOrigins = ACCEPTED_ORIGINS } = {}) => cors({

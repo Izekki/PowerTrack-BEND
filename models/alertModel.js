@@ -187,6 +187,20 @@ static async marcarUnaComoLeida(alertaId) {
   }
 }
 
+// Obtener una alerta por ID
+static async obtenerPorId(alertaId) {
+  try {
+    const [rows] = await db.execute(
+      `SELECT id, usuario_id, mensaje, nivel, fecha, leida, id_tipo_dispositivo, tipo_alerta_id
+       FROM alertas WHERE id = ?`,
+      [alertaId]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    throw new Error(`Error al obtener alerta: ${err.message}`);
+  }
+}
+
 
 
 

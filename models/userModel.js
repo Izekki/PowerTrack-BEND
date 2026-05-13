@@ -2,6 +2,9 @@ import bcrypt from 'bcrypt'
 import { db } from '../db/connection.js';
 import DBConnectionError from './modelserror/DBConnectionError.js';
 import DBElementAlredyExists from './modelserror/DBElementAlredyExists.js';
+import ValidationError from './modelserror/ValidationError.js';
+import AuthenticationError from './modelserror/AuthenticationError.js';
+import NotFoundError from './modelserror/NotFoundError.js';
 
 export class userModel {
 
@@ -231,18 +234,18 @@ export const changePasswordDB = async (userId, currentPassword, newPassword) => 
         );
 
         if (!user) {
-            throw new Error('Usuario no encontrado');
+            throw new NotFoundError('Usuario no encontrado');
         }
 
         // 2. Verificar que la contraseña actual sea correcta
         const isMatch = await bcrypt.compare(currentPassword, user.contraseña);
         if (!isMatch) {
-            throw new Error('La contraseña actual es incorrecta');
+            throw new AuthenticationError('La contraseña actual es incorrecta');
         }
 
         // 3. Validar que la nueva contraseña sea diferente
         if (await bcrypt.compare(newPassword, user.contraseña)) {
-            throw new Error('La nueva contraseña debe ser diferente a la actual');
+            throw new ValidationError('La nueva contraseña debe ser diferente a la actual');
         }
 
         // 4. Hashear la nueva contraseña
@@ -260,7 +263,67 @@ export const changePasswordDB = async (userId, currentPassword, newPassword) => 
 
     } catch (error) {
         await connection.rollback();
+        // Re-lanzar errores personalizados sin envolverlos
+        if (error instanceof ValidationError || error instanceof AuthenticationError || error instanceof NotFoundError) {
+            throw error;
+        }
         throw new DBConnectionError('Error al cambiar la contraseña: ' + error.message);
+    } finally {
+        connection.release();
+    }
+};
+
+export const deleteUserDB = async (userId, confirmationText) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Validar que el texto de confirmación sea "Confirmar"
+        if (confirmationText !== 'Confirmar') {
+            throw new ValidationError('Texto de confirmación incorrecto. Debe escribir exactamente "Confirmar"');
+        }
+
+        // 2. Verificar que el usuario existe
+        const [user] = await connection.query(
+            `SELECT id, correo FROM usuarios WHERE id = ?`,
+            [userId]
+        );
+
+        if (!user || user.length === 0) {
+            throw new NotFoundError('Usuario no encontrado');
+        }
+
+        const userEmail = user[0].correo;
+
+        // 3. Eliminar el usuario (las relaciones en cascada se eliminan automáticamente)
+        await connection.query(
+            `DELETE FROM usuarios WHERE id = ?`,
+            [userId]
+        );
+
+        await connection.commit();
+        return {
+            success: true,
+            message: 'Usuario eliminado permanentemente',
+            deletedEmail: userEmail
+        };
+
+    } catch (error) {
+        await connection.rollback();
+        
+        console.error('Error en deleteUserDB:', error);
+        
+        // Re-lanzar errores personalizados sin envolverlos
+        if (error instanceof ValidationError || error instanceof NotFoundError) {
+            throw error;
+        }
+        
+        // Error de constraint de foreign key
+        if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+            throw new DBConnectionError('No se puede eliminar el usuario porque tiene datos relacionados. Contacta al soporte.');
+        }
+        
+        throw new DBConnectionError('Error al eliminar el usuario: ' + error.message);
     } finally {
         connection.release();
     }
