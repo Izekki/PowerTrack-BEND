@@ -130,7 +130,4 @@ dist
 .pnp.*
 
 #dotenv
-.env
-
-# Markdown files
-*.md
+.env
