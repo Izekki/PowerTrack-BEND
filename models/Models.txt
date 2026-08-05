@@ -1,3 +1,0 @@
-MODELS
-
-Aqui iran todo los modelos que se ocuparan para poder manejarlos de acuerdo al Modelo MVC
