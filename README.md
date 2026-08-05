@@ -62,6 +62,6 @@ El backend está estructurado bajo un patrón de diseño desacoplado (MVC / API 
 
 ## 📜 Adscripción
 
-Este proyecto forma parte de los trabajos de investigación y desarrollo tecnológico de la **Universidad Veracruzana** (Facultad de Estadística e Informática, Maestría en Ingeniería de Software).
+Este proyecto forma parte de los trabajos de investigación y desarrollo tecnológico de la **Universidad Veracruzana** (Facultad de Estadística e Informática, Maestría en Sistemas Interactivos Centrados en el Usuario).
 
 **PowerTrack-BEND** — *Transformando la gestión energética en una experiencia inteligente, transparente y eficiente.*
